@@ -1,6 +1,7 @@
 const vscode = require('vscode');
 const { execFile } = require('child_process');
-const { schemaSql, groupSchemaRows, ident, sqlString } = require('./sql');
+const { schemaSql, groupSchemaRows, listSnapshotsSql, ident, sqlString } = require('./sql');
+const { formatBytes, formatDuration } = require('./format');
 
 const TOKEN_KEY = 'motherduck_token';
 const RUN_TIMEOUT_MS = 30 * 60 * 1000;
@@ -155,6 +156,13 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 				item.contextValue = 'backupsGroup';
 				return item;
 			}
+			if (node.kind === 'snapshot') {
+				const item = new vscode.TreeItem(node.createdTs, vscode.TreeItemCollapsibleState.None);
+				item.description = formatBytes(node.activeBytes);
+				item.iconPath = new vscode.ThemeIcon('history');
+				item.contextValue = 'snapshot';
+				return item;
+			}
 			if (node.kind === 'schema') {
 				const item = new vscode.TreeItem(node.name, Collapsed);
 				item.iconPath = new vscode.ThemeIcon('symbol-namespace');
@@ -199,7 +207,8 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 					return groupSchemaRows(rows).map((s) => ({ kind: 'schema', database: node.database, name: s.schema, tables: s.tables }));
 				}
 				if (node.kind === 'backupsGroup') {
-					return [];
+					const rows = await query(listSnapshotsSql(node.database));
+					return rows.map((r) => ({ kind: 'snapshot', database: node.database, snapshotId: r.snapshot_id, createdTs: r.created_ts, activeBytes: r.active_bytes }));
 				}
 				if (node.kind === 'schema') {
 					return node.tables.map((relation) => ({ kind: 'table', database: node.database, relation: { ...relation, schema: node.name } }));
