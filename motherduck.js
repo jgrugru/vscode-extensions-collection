@@ -1,7 +1,7 @@
 const fs = require('fs');
 const vscode = require('vscode');
 const { execFile } = require('child_process');
-const { schemaSql, groupSchemaRows, listSnapshotsSql, copyDatabaseSql, ident, sqlString } = require('./sql');
+const { schemaSql, groupSchemaRows, listSnapshotsSql, copyDatabaseSql, copyTableSql, ident, sqlString } = require('./sql');
 const { formatBytes, formatDuration } = require('./format');
 
 const TOKEN_KEY = 'motherduck_token';
@@ -255,6 +255,28 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		}
 	}
 
+	/** @param {{database: string, relation: {schema: string, table: string}}} node */
+	async function downloadTable(node) {
+		if (!(await requireSignIn())) {
+			return;
+		}
+		const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(`${node.relation.table}.duckdb`), filters: { 'DuckDB database': ['duckdb'] } });
+		if (!uri) {
+			return;
+		}
+		const started = Date.now();
+		try {
+			await vscode.window.withProgress(
+				{ location: vscode.ProgressLocation.Notification, title: `Downloading ${node.relation.table}` },
+				() => query(`ATTACH ${sqlString(uri.fsPath)} AS ${ident(TARGET_ALIAS)}; ${copyTableSql(node.database, node.relation.schema, node.relation.table, TARGET_ALIAS)}`),
+			);
+			const size = formatBytes(fs.statSync(uri.fsPath).size);
+			vscode.window.showInformationMessage(`Downloaded ${node.relation.table} (${size}) in ${formatDuration(Date.now() - started)}.`);
+		} catch (err) {
+			vscode.window.showErrorMessage(`Download failed: ${err.message}`);
+		}
+	}
+
 	/** @param {{name: string}} node */
 	async function openDives(node) {
 		const url = `https://app.motherduck.com/database/${encodeURIComponent(node.name)}`;
@@ -275,6 +297,7 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		vscode.commands.registerCommand('motherduckExplorer.preview', preview),
 		vscode.commands.registerCommand('motherduckExplorer.openDives', openDives),
 		vscode.commands.registerCommand('motherduckExplorer.downloadDatabase', downloadDatabase),
+		vscode.commands.registerCommand('motherduckExplorer.downloadTable', downloadTable),
 	);
 }
 
