@@ -1,7 +1,7 @@
 const fs = require('fs');
 const vscode = require('vscode');
 const { execFile } = require('child_process');
-const { schemaSql, groupSchemaRows, listSnapshotsSql, copyDatabaseSql, copyTableSql, ident, sqlString } = require('./sql');
+const { schemaSql, groupSchemaRows, listSnapshotsSql, restoreSnapshotSql, copyDatabaseSql, copyTableSql, dropDatabaseSql, ident, sqlString } = require('./sql');
 const { formatBytes, formatDuration } = require('./format');
 
 const TOKEN_KEY = 'motherduck_token';
@@ -277,6 +277,49 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		}
 	}
 
+	/** @param {{database: string, createdTs: string}} node */
+	async function downloadSnapshot(node) {
+		if (!(await requireSignIn())) {
+			return;
+		}
+		const tempName = `__md_explorer_restore_${Math.random().toString(36).slice(2, 10)}`;
+		const confirmed = await vscode.window.showWarningMessage(
+			`Download snapshot from ${node.createdTs}?`,
+			{ modal: true, detail: `This temporarily creates a MotherDuck database named "${tempName}" to restore this snapshot, then deletes it.` },
+			'Download',
+		);
+		if (confirmed !== 'Download') {
+			return;
+		}
+		const defaultName = `${node.database}_${node.createdTs.replace(/[: ]/g, '-')}.duckdb`;
+		const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(defaultName), filters: { 'DuckDB database': ['duckdb'] } });
+		if (!uri) {
+			return;
+		}
+		const started = Date.now();
+		try {
+			await vscode.window.withProgress(
+				{ location: vscode.ProgressLocation.Notification, title: `Restoring snapshot from ${node.createdTs}` },
+				async () => {
+					await query(restoreSnapshotSql(node.database, tempName, node.createdTs));
+					try {
+						await query(`ATTACH ${sqlString(uri.fsPath)} AS ${ident(TARGET_ALIAS)}; ${copyDatabaseSql(tempName, TARGET_ALIAS)}`);
+					} finally {
+						try {
+							await query(dropDatabaseSql(tempName));
+						} catch (dropErr) {
+							vscode.window.showErrorMessage(`Could not remove temporary database "${tempName}": ${dropErr.message}`);
+						}
+					}
+				},
+			);
+			const size = formatBytes(fs.statSync(uri.fsPath).size);
+			vscode.window.showInformationMessage(`Downloaded snapshot (${size}) in ${formatDuration(Date.now() - started)}.`);
+		} catch (err) {
+			vscode.window.showErrorMessage(`Snapshot download failed: ${err.message}`);
+		}
+	}
+
 	/** @param {{name: string}} node */
 	async function openDives(node) {
 		const url = `https://app.motherduck.com/database/${encodeURIComponent(node.name)}`;
@@ -298,6 +341,7 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		vscode.commands.registerCommand('motherduckExplorer.openDives', openDives),
 		vscode.commands.registerCommand('motherduckExplorer.downloadDatabase', downloadDatabase),
 		vscode.commands.registerCommand('motherduckExplorer.downloadTable', downloadTable),
+		vscode.commands.registerCommand('motherduckExplorer.downloadSnapshot', downloadSnapshot),
 	);
 }
 
