@@ -4,7 +4,7 @@ Extension name: `vscode-extension-motherduck`. Display name: "MotherDuck Explore
 
 ## Goal
 
-Let a developer browse everything in their MotherDuck account from a VS Code sidebar: databases, schemas, tables and columns; jump into the MotherDuck web UI (to reach dives, among other things) without leaving the editor; and download a database's current state or any of its snapshots ("backups") to a local `.duckdb` file.
+Let a developer browse everything in their MotherDuck account from a VS Code sidebar, natively: databases, schemas, tables, columns and row previews all render inside VS Code, with no browser involved. The only thing that opens a browser tab is reaching dives, since MotherDuck has no other way to show them. The extension also downloads a database's current state, a single table, or any of a database's snapshots ("backups") to a local `.duckdb` file.
 
 This is a new, standalone extension. It does not share code or a package with the sibling `vscode-extension-duckdb`, even though that extension has an existing MotherDuck tree of its own; this one is written fresh.
 
@@ -12,17 +12,19 @@ This is a new, standalone extension. It does not share code or a package with th
 
 In v1:
 - A sidebar tree, "MotherDuck Explorer", listing every database, drilling into schemas, tables/views and columns.
-- Per database: an inline "Open in MotherDuck" button that opens `https://app.motherduck.com/database/<name>` in VS Code's built-in Simple Browser (an embedded webview tab), never the system browser. The user reaches dives by navigating there themselves; the extension never lists, fetches or renders dive content.
-- Per table: click to preview the first 100 rows in a read-only webview.
+- Per database: an inline "Open Dives" button that opens `https://app.motherduck.com/database/<name>` in VS Code's built-in Simple Browser (an embedded webview tab), never the system browser. This is the only thing in the extension that opens a browser. The user reaches a specific dive by navigating there themselves; the extension never lists, fetches or renders dive content.
+- Per table: click to preview the first 100 rows in a read-only webview, native to VS Code.
 - Per database: a "Backups" group listing its snapshots (`md_information_schema.database_snapshots`), newest first, each showing its timestamp and size.
-- Download actions:
+- Download actions, all native (no browser):
   - A database's context menu: "Download current state" copies it to a local `.duckdb` file the user chooses.
+  - A table's context menu: "Download as .duckdb file" copies just that table to a local `.duckdb` file.
   - A snapshot's inline button: "Download" restores that snapshot to a local `.duckdb` file, using a temporary MotherDuck database that is always dropped afterward.
 - Sign in / sign out, stored in VS Code secret storage, same shape as the sibling extension.
 - Refresh button on the view.
 
 Out of scope for v1:
-- Listing or opening dives directly (see above — out by design, not by omission).
+- Listing or opening a specific dive directly (see above — out by design, not by omission).
+- Choosing a download format other than `.duckdb` (CSV/Parquet export).
 - Uploading data (that's the sibling extension's job).
 - Creating or renaming shares.
 - Any REST/HTTP calls to MotherDuck's API; everything goes through the `duckdb` CLI.
@@ -62,9 +64,9 @@ Same shape as `vscode-extension-duckdb`'s `motherduck.js`: a `motherduck_token` 
 
 The tree lazily loads each level's children on first expand, and has a Refresh button in the view title that re-runs everything below the root.
 
-### Opening MotherDuck
+### Opening dives
 
-The database node's inline button runs:
+The database node's "Open Dives" inline button runs:
 
 ```js
 vscode.commands.executeCommand('simpleBrowser.show', `https://app.motherduck.com/database/${encodeURIComponent(name)}`);
@@ -82,6 +84,12 @@ Context menu item on a database node:
 1. `vscode.window.showSaveDialog`, default filename `<db>.duckdb`.
 2. Confirm dialog naming the database and destination.
 3. Run, with a progress notification: `ATTACH 'md:<db>'; ATTACH '<path>' AS out; COPY FROM DATABASE <db> TO out;` — generous timeout (30 minutes, matching the sibling extension's upload timeout) since this copies a whole database.
+
+### Download a table
+
+Context menu item on a table node:
+1. `vscode.window.showSaveDialog`, default filename `<table>.duckdb`.
+2. Run, with a progress notification: `ATTACH 'md:<db>'; ATTACH '<path>' AS out; CREATE TABLE out.<table> AS SELECT * FROM <db>.<schema>.<table>;`. No temporary database is needed, since this reads the table's live data directly.
 
 ### Download a snapshot
 
@@ -109,15 +117,15 @@ Plain JavaScript, no build step, own repo `vscode-extension-motherduck`:
 - `package.json`: view container, view, commands, menus, settings (none needed beyond auth for v1).
 - `extension.js`: activation, tree provider, command registration.
 - `motherduck.js`: auth, the `run` helper, discovery queries, preview, download and restore flows.
-- `sql.js`: pure SQL builders — `listSnapshotsSql`, `restoreSnapshotSql`, `copyDatabaseSql`, `dropDatabaseSql`, identifier/string quoting (own copy, not shared).
+- `sql.js`: pure SQL builders — `listSnapshotsSql`, `restoreSnapshotSql`, `copyDatabaseSql`, `copyTableSql`, `dropDatabaseSql`, identifier/string quoting (own copy, not shared).
 - `format.js`: pure `formatBytes(n)` and `formatDuration(ms)` helpers.
 - `sql.test.js`, `format.test.js`: node asserts, run with `npm test`.
 - `README.md`, `LICENSE` (MIT), `.vscodeignore`, `.gitignore`.
 
 ## Testing
 
-- Unit: `npm test` covers every pure SQL builder (identifier quoting, snapshot filter, restore statement with a temp name, copy statement) and both format helpers (byte thresholds, sub-minute and multi-minute durations).
-- Manual: build the `.vsix`, install it, and check against a real account: the tree lists databases/schemas/tables, Open in MotherDuck opens Simple Browser (not the system browser), a table preview loads, a current-state download produces a valid local file, and a snapshot download restores, copies, downloads, and cleans up the temporary database even when cancelled partway.
+- Unit: `npm test` covers every pure SQL builder (identifier quoting, snapshot filter, restore statement with a temp name, database copy statement, single-table copy statement) and both format helpers (byte thresholds, sub-minute and multi-minute durations).
+- Manual: build the `.vsix`, install it, and check against a real account: the tree lists databases/schemas/tables, Open Dives opens Simple Browser (not the system browser) and nothing else in the extension ever does, a table preview loads natively, a current-state download and a single-table download each produce a valid local file, and a snapshot download restores, copies, downloads, and cleans up the temporary database even when cancelled partway.
 
 ## Open questions
 
