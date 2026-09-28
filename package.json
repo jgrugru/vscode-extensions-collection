@@ -133,7 +133,7 @@
     }
   },
   "scripts": {
-    "test": "node sql.test.js && node format.test.js",
+    "test": "node sql.test.js && node format.test.js && node download.test.js",
     "package": "npx @vscode/vsce package"
   },
   "devDependencies": {

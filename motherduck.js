@@ -3,6 +3,7 @@ const vscode = require('vscode');
 const { execFile } = require('child_process');
 const { schemaSql, groupSchemaRows, listSnapshotsSql, restoreSnapshotSql, copyDatabaseSql, copyTableSql, dropDatabaseSql, ident, sqlString } = require('./sql');
 const { formatBytes, formatDuration } = require('./format');
+const { prepareDownloadTarget, defaultDownloadPath } = require('./download');
 
 const TOKEN_KEY = 'motherduck_token';
 const RUN_TIMEOUT_MS = 30 * 60 * 1000;
@@ -119,10 +120,17 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 </style></head><body><h1>${escapeHtml(title)} <small>${escapeHtml(note)}</small></h1>${table}</body></html>`;
 	}
 
+	const previewPanels = new Map();
+
 	/** @param {{database: string, relation: {schema: string, table: string}}} node */
 	async function preview(node) {
 		const { database, relation } = node;
 		const title = `${database}.${relation.schema}.${relation.table}`;
+		const existing = previewPanels.get(title);
+		if (existing) {
+			existing.reveal();
+			return;
+		}
 		try {
 			const rows = await vscode.window.withProgress(
 				{ location: vscode.ProgressLocation.Window, title: `MotherDuck: reading ${relation.table}` },
@@ -130,6 +138,8 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 			);
 			const panel = vscode.window.createWebviewPanel('motherduckPreview', `Preview: ${relation.table}`, vscode.ViewColumn.Beside, {});
 			panel.webview.html = renderRowsHtml(title, rows, `first ${PREVIEW_ROWS} rows`);
+			previewPanels.set(title, panel);
+			panel.onDidDispose(() => previewPanels.delete(title));
 		} catch (err) {
 			vscode.window.showErrorMessage(`MotherDuck preview failed: ${err.message}`);
 		}
@@ -195,8 +205,9 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 			}
 			try {
 				if (!node) {
-					return (await query('SELECT name FROM md_information_schema.databases ORDER BY name'))
-						.map((r) => ({ kind: 'database', name: r.name }));
+					const rows = await query('SELECT name FROM md_information_schema.databases ORDER BY name');
+					view.message = undefined;
+					return rows.map((r) => ({ kind: 'database', name: r.name }));
 				}
 				if (node.kind === 'database') {
 					return [
@@ -219,18 +230,34 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 					return node.relation.columns.map((column) => ({ kind: 'column', column }));
 				}
 			} catch (err) {
-				vscode.window.showErrorMessage(`MotherDuck: ${err.message}`);
+				if (!node) {
+					// A persistent message, not a toast: an empty root result also renders the
+					// signed-in "No databases found" welcome view, so a transient toast for a
+					// broken token or a missing `duckdb` binary would fade and leave that
+					// empty-account message standing in for a real error.
+					view.message = `Could not list databases: ${err.message}`;
+				} else {
+					vscode.window.showErrorMessage(`MotherDuck: ${err.message}`);
+				}
 			}
 			return [];
 		},
 	};
+
+	/** @type {vscode.TreeView<any>} */
+	let view;
+
+	/** @param {string} filename */
+	function downloadDefaultPath(filename) {
+		return defaultDownloadPath(filename, { workspaceFolder: vscode.workspace.workspaceFolders?.[0]?.uri.fsPath });
+	}
 
 	/** @param {{name: string}} node */
 	async function downloadDatabase(node) {
 		if (!(await requireSignIn())) {
 			return;
 		}
-		const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(`${node.name}.duckdb`), filters: { 'DuckDB database': ['duckdb'] } });
+		const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(downloadDefaultPath(`${node.name}.duckdb`)), filters: { 'DuckDB database': ['duckdb'] } });
 		if (!uri) {
 			return;
 		}
@@ -246,7 +273,10 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		try {
 			await vscode.window.withProgress(
 				{ location: vscode.ProgressLocation.Notification, title: `Downloading ${node.name}` },
-				() => query(`ATTACH ${sqlString(uri.fsPath)} AS ${ident(TARGET_ALIAS)}; ${copyDatabaseSql(node.name, TARGET_ALIAS)}`),
+				() => {
+					prepareDownloadTarget(uri.fsPath);
+					return query(`ATTACH ${sqlString(uri.fsPath)} AS ${ident(TARGET_ALIAS)}; ${copyDatabaseSql(node.name, TARGET_ALIAS)}`);
+				},
 			);
 			const size = formatBytes(fs.statSync(uri.fsPath).size);
 			vscode.window.showInformationMessage(`Downloaded ${node.name} (${size}) in ${formatDuration(Date.now() - started)}.`);
@@ -260,7 +290,7 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		if (!(await requireSignIn())) {
 			return;
 		}
-		const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(`${node.relation.table}.duckdb`), filters: { 'DuckDB database': ['duckdb'] } });
+		const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(downloadDefaultPath(`${node.relation.table}.duckdb`)), filters: { 'DuckDB database': ['duckdb'] } });
 		if (!uri) {
 			return;
 		}
@@ -268,7 +298,10 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		try {
 			await vscode.window.withProgress(
 				{ location: vscode.ProgressLocation.Notification, title: `Downloading ${node.relation.table}` },
-				() => query(`ATTACH ${sqlString(uri.fsPath)} AS ${ident(TARGET_ALIAS)}; ${copyTableSql(node.database, node.relation.schema, node.relation.table, TARGET_ALIAS)}`),
+				() => {
+					prepareDownloadTarget(uri.fsPath);
+					return query(`ATTACH ${sqlString(uri.fsPath)} AS ${ident(TARGET_ALIAS)}; ${copyTableSql(node.database, node.relation.schema, node.relation.table, TARGET_ALIAS)}`);
+				},
 			);
 			const size = formatBytes(fs.statSync(uri.fsPath).size);
 			vscode.window.showInformationMessage(`Downloaded ${node.relation.table} (${size}) in ${formatDuration(Date.now() - started)}.`);
@@ -292,7 +325,7 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 			return;
 		}
 		const defaultName = `${node.database}_${node.createdTs.replace(/[: ]/g, '-')}.duckdb`;
-		const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(defaultName), filters: { 'DuckDB database': ['duckdb'] } });
+		const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(downloadDefaultPath(defaultName)), filters: { 'DuckDB database': ['duckdb'] } });
 		if (!uri) {
 			return;
 		}
@@ -303,6 +336,7 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 				async () => {
 					await query(restoreSnapshotSql(node.database, tempName, node.createdTs));
 					try {
+						prepareDownloadTarget(uri.fsPath);
 						await query(`ATTACH ${sqlString(uri.fsPath)} AS ${ident(TARGET_ALIAS)}; ${copyDatabaseSql(tempName, TARGET_ALIAS)}`);
 					} finally {
 						try {
@@ -330,10 +364,12 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		}
 	}
 
+	view = vscode.window.createTreeView('motherduckExplorer.databases', { treeDataProvider: provider });
+
 	updateSignedIn();
 	context.subscriptions.push(
 		changed,
-		vscode.window.registerTreeDataProvider('motherduckExplorer.databases', provider),
+		view,
 		vscode.commands.registerCommand('motherduckExplorer.signIn', signIn),
 		vscode.commands.registerCommand('motherduckExplorer.signOut', signOut),
 		vscode.commands.registerCommand('motherduckExplorer.refresh', () => changed.fire(undefined)),
