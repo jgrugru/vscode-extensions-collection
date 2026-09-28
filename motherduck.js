@@ -1,10 +1,12 @@
+const fs = require('fs');
 const vscode = require('vscode');
 const { execFile } = require('child_process');
-const { schemaSql, groupSchemaRows, listSnapshotsSql, ident, sqlString } = require('./sql');
+const { schemaSql, groupSchemaRows, listSnapshotsSql, copyDatabaseSql, ident, sqlString } = require('./sql');
 const { formatBytes, formatDuration } = require('./format');
 
 const TOKEN_KEY = 'motherduck_token';
 const RUN_TIMEOUT_MS = 30 * 60 * 1000;
+const TARGET_ALIAS = 'target_db';
 
 /**
  * Run one query against MotherDuck through the DuckDB CLI and parse its JSON output.
@@ -224,6 +226,36 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 	};
 
 	/** @param {{name: string}} node */
+	async function downloadDatabase(node) {
+		if (!(await requireSignIn())) {
+			return;
+		}
+		const uri = await vscode.window.showSaveDialog({ defaultUri: vscode.Uri.file(`${node.name}.duckdb`), filters: { 'DuckDB database': ['duckdb'] } });
+		if (!uri) {
+			return;
+		}
+		const ok = await vscode.window.showWarningMessage(
+			`Download "${node.name}" to ${uri.fsPath}?`,
+			{ modal: true, detail: "Copies the database's current schema and data to a local file." },
+			'Download',
+		);
+		if (ok !== 'Download') {
+			return;
+		}
+		const started = Date.now();
+		try {
+			await vscode.window.withProgress(
+				{ location: vscode.ProgressLocation.Notification, title: `Downloading ${node.name}` },
+				() => query(`ATTACH ${sqlString(uri.fsPath)} AS ${ident(TARGET_ALIAS)}; ${copyDatabaseSql(node.name, TARGET_ALIAS)}`),
+			);
+			const size = formatBytes(fs.statSync(uri.fsPath).size);
+			vscode.window.showInformationMessage(`Downloaded ${node.name} (${size}) in ${formatDuration(Date.now() - started)}.`);
+		} catch (err) {
+			vscode.window.showErrorMessage(`Download failed: ${err.message}`);
+		}
+	}
+
+	/** @param {{name: string}} node */
 	async function openDives(node) {
 		const url = `https://app.motherduck.com/database/${encodeURIComponent(node.name)}`;
 		try {
@@ -242,6 +274,7 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		vscode.commands.registerCommand('motherduckExplorer.refresh', () => changed.fire(undefined)),
 		vscode.commands.registerCommand('motherduckExplorer.preview', preview),
 		vscode.commands.registerCommand('motherduckExplorer.openDives', openDives),
+		vscode.commands.registerCommand('motherduckExplorer.downloadDatabase', downloadDatabase),
 	);
 }
 
