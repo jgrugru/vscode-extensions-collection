@@ -214,6 +214,16 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		},
 	};
 
+	/** @param {{name: string}} node */
+	async function openDives(node) {
+		const url = `https://app.motherduck.com/database/${encodeURIComponent(node.name)}`;
+		try {
+			await vscode.commands.executeCommand('simpleBrowser.show', url);
+		} catch (err) {
+			vscode.window.showErrorMessage(`Could not open the embedded browser: ${err.message}`);
+		}
+	}
+
 	updateSignedIn();
 	context.subscriptions.push(
 		changed,
@@ -222,6 +232,7 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		vscode.commands.registerCommand('motherduckExplorer.signOut', signOut),
 		vscode.commands.registerCommand('motherduckExplorer.refresh', () => changed.fire(undefined)),
 		vscode.commands.registerCommand('motherduckExplorer.preview', preview),
+		vscode.commands.registerCommand('motherduckExplorer.openDives', openDives),
 	);
 }
 
