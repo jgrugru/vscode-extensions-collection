@@ -1,5 +1,6 @@
 const vscode = require('vscode');
 const { execFile } = require('child_process');
+const { schemaSql, groupSchemaRows, ident, sqlString } = require('./sql');
 
 const TOKEN_KEY = 'motherduck_token';
 const RUN_TIMEOUT_MS = 30 * 60 * 1000;
@@ -81,15 +82,98 @@ function registerMotherDuck(context) {
 		changed.fire(undefined);
 	}
 
+	const PREVIEW_ROWS = 100;
+
+	/** @param {string} value */
+	function escapeHtml(value) {
+		return String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+	}
+
+	/** @param {string} title @param {any[]} rows @param {string} note */
+	function renderRowsHtml(title, rows, note) {
+		const cols = rows.length ? Object.keys(rows[0]) : [];
+		const cell = (v) => {
+			if (v === null || v === undefined) {
+				return '<td class="null">NULL</td>';
+			}
+			const text = typeof v === 'object' ? JSON.stringify(v) : String(v);
+			return `<td>${escapeHtml(text.length > 200 ? `${text.slice(0, 200)}…` : text)}</td>`;
+		};
+		const table = rows.length === 0
+			? '<p class="empty">No rows.</p>'
+			: `<table><thead><tr>${cols.map((c) => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>${
+				rows.map((r) => `<tr>${cols.map((c) => cell(r[c])).join('')}</tr>`).join('')}</tbody></table>`;
+		return `<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';">
+<style>
+body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 0 16px 16px; }
+h1 { font-size: 1.3em; } small { color: var(--vscode-descriptionForeground); font-weight: normal; }
+table { border-collapse: collapse; }
+th, td { text-align: left; padding: 3px 14px 3px 0; border-bottom: 1px solid var(--vscode-panel-border); white-space: nowrap; }
+th { color: var(--vscode-descriptionForeground); font-weight: normal; }
+.null { color: var(--vscode-descriptionForeground); font-style: italic; }
+.empty { color: var(--vscode-descriptionForeground); }
+</style></head><body><h1>${escapeHtml(title)} <small>${escapeHtml(note)}</small></h1>${table}</body></html>`;
+	}
+
+	/** @param {{database: string, relation: {schema: string, table: string}}} node */
+	async function preview(node) {
+		const { database, relation } = node;
+		const title = `${database}.${relation.schema}.${relation.table}`;
+		try {
+			const rows = await vscode.window.withProgress(
+				{ location: vscode.ProgressLocation.Window, title: `MotherDuck: reading ${relation.table}` },
+				() => query(`SELECT * FROM ${ident(database)}.${ident(relation.schema)}.${ident(relation.table)} LIMIT ${PREVIEW_ROWS}`),
+			);
+			const panel = vscode.window.createWebviewPanel('motherduckPreview', `Preview: ${relation.table}`, vscode.ViewColumn.Beside, {});
+			panel.webview.html = renderRowsHtml(title, rows, `first ${PREVIEW_ROWS} rows`);
+		} catch (err) {
+			vscode.window.showErrorMessage(`MotherDuck preview failed: ${err.message}`);
+		}
+	}
+
 	/** @implements {vscode.TreeDataProvider<any>} */
 	const provider = {
 		onDidChangeTreeData: changed.event,
 
 		getTreeItem(node) {
+			const Collapsed = vscode.TreeItemCollapsibleState.Collapsed;
+			const None = vscode.TreeItemCollapsibleState.None;
 			if (node.kind === 'database') {
-				const item = new vscode.TreeItem(node.name, vscode.TreeItemCollapsibleState.Collapsed);
+				const item = new vscode.TreeItem(node.name, Collapsed);
 				item.iconPath = new vscode.ThemeIcon('database');
 				item.contextValue = 'database';
+				return item;
+			}
+			if (node.kind === 'schemasGroup') {
+				const item = new vscode.TreeItem('Schemas', Collapsed);
+				item.contextValue = 'schemasGroup';
+				return item;
+			}
+			if (node.kind === 'backupsGroup') {
+				const item = new vscode.TreeItem('Backups', Collapsed);
+				item.contextValue = 'backupsGroup';
+				return item;
+			}
+			if (node.kind === 'schema') {
+				const item = new vscode.TreeItem(node.name, Collapsed);
+				item.iconPath = new vscode.ThemeIcon('symbol-namespace');
+				item.contextValue = 'schema';
+				return item;
+			}
+			if (node.kind === 'table') {
+				const r = node.relation;
+				const item = new vscode.TreeItem(r.table, Collapsed);
+				item.description = [r.kind, r.rows != null ? `${r.rows.toLocaleString()} rows` : null].filter(Boolean).join(' · ');
+				item.iconPath = new vscode.ThemeIcon(r.kind === 'view' ? 'eye' : 'table');
+				item.contextValue = 'table';
+				item.command = { command: 'motherduckExplorer.preview', title: 'Preview', arguments: [node] };
+				return item;
+			}
+			if (node.kind === 'column') {
+				const item = new vscode.TreeItem(node.column.name, None);
+				item.description = `${node.column.type}${node.column.nullable ? '' : ' · NOT NULL'}`;
+				item.iconPath = new vscode.ThemeIcon('symbol-field');
 				return item;
 			}
 			throw new Error(`Unknown node kind: ${node.kind}`);
@@ -103,6 +187,25 @@ function registerMotherDuck(context) {
 				if (!node) {
 					return (await query('SELECT name FROM md_information_schema.databases ORDER BY name'))
 						.map((r) => ({ kind: 'database', name: r.name }));
+				}
+				if (node.kind === 'database') {
+					return [
+						{ kind: 'schemasGroup', database: node.name },
+						{ kind: 'backupsGroup', database: node.name },
+					];
+				}
+				if (node.kind === 'schemasGroup') {
+					const rows = await query(schemaSql(sqlString(node.database)));
+					return groupSchemaRows(rows).map((s) => ({ kind: 'schema', database: node.database, name: s.schema, tables: s.tables }));
+				}
+				if (node.kind === 'backupsGroup') {
+					return [];
+				}
+				if (node.kind === 'schema') {
+					return node.tables.map((relation) => ({ kind: 'table', database: node.database, relation: { ...relation, schema: node.name } }));
+				}
+				if (node.kind === 'table') {
+					return node.relation.columns.map((column) => ({ kind: 'column', column }));
 				}
 			} catch (err) {
 				vscode.window.showErrorMessage(`MotherDuck: ${err.message}`);
@@ -118,6 +221,7 @@ function registerMotherDuck(context) {
 		vscode.commands.registerCommand('motherduckExplorer.signIn', signIn),
 		vscode.commands.registerCommand('motherduckExplorer.signOut', signOut),
 		vscode.commands.registerCommand('motherduckExplorer.refresh', () => changed.fire(undefined)),
+		vscode.commands.registerCommand('motherduckExplorer.preview', preview),
 	);
 }
 
