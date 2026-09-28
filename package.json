@@ -1,0 +1,142 @@
+{
+  "name": "vscode-extension-motherduck",
+  "displayName": "MotherDuck Explorer",
+  "description": "Browse your MotherDuck databases, schemas and tables natively, open dives, and download databases, tables or snapshots as local DuckDB files",
+  "version": "0.1.0",
+  "publisher": "jgrugru",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "motherduck",
+    "duckdb",
+    "database",
+    "backup",
+    "snapshot"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "motherduckExplorer",
+          "title": "MotherDuck",
+          "icon": "resources/motherduck.svg"
+        }
+      ]
+    },
+    "views": {
+      "motherduckExplorer": [
+        {
+          "id": "motherduckExplorer.databases",
+          "name": "Databases"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "motherduckExplorer.databases",
+        "contents": "Sign in to browse your MotherDuck account.\n[Sign In](command:motherduckExplorer.signIn)",
+        "when": "!motherduckExplorer.signedIn"
+      },
+      {
+        "view": "motherduckExplorer.databases",
+        "contents": "No databases found in this account.\n[Refresh](command:motherduckExplorer.refresh)",
+        "when": "motherduckExplorer.signedIn"
+      }
+    ],
+    "commands": [
+      {
+        "command": "motherduckExplorer.signIn",
+        "title": "MotherDuck: Sign In"
+      },
+      {
+        "command": "motherduckExplorer.signOut",
+        "title": "MotherDuck: Sign Out"
+      },
+      {
+        "command": "motherduckExplorer.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "motherduckExplorer.preview",
+        "title": "Preview Rows"
+      },
+      {
+        "command": "motherduckExplorer.openDives",
+        "title": "Open Dives",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "motherduckExplorer.downloadDatabase",
+        "title": "Download Current State"
+      },
+      {
+        "command": "motherduckExplorer.downloadTable",
+        "title": "Download as .duckdb File"
+      },
+      {
+        "command": "motherduckExplorer.downloadSnapshot",
+        "title": "Download",
+        "icon": "$(desktop-download)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "motherduckExplorer.refresh", "when": "false" },
+        { "command": "motherduckExplorer.preview", "when": "false" },
+        { "command": "motherduckExplorer.openDives", "when": "false" },
+        { "command": "motherduckExplorer.downloadDatabase", "when": "false" },
+        { "command": "motherduckExplorer.downloadTable", "when": "false" },
+        { "command": "motherduckExplorer.downloadSnapshot", "when": "false" }
+      ],
+      "view/title": [
+        {
+          "command": "motherduckExplorer.refresh",
+          "when": "view == motherduckExplorer.databases && motherduckExplorer.signedIn",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "motherduckExplorer.openDives",
+          "when": "view == motherduckExplorer.databases && viewItem == database",
+          "group": "inline"
+        },
+        {
+          "command": "motherduckExplorer.downloadDatabase",
+          "when": "view == motherduckExplorer.databases && viewItem == database",
+          "group": "motherduck@1"
+        },
+        {
+          "command": "motherduckExplorer.preview",
+          "when": "view == motherduckExplorer.databases && viewItem == table",
+          "group": "inline"
+        },
+        {
+          "command": "motherduckExplorer.downloadTable",
+          "when": "view == motherduckExplorer.databases && viewItem == table",
+          "group": "motherduck@1"
+        },
+        {
+          "command": "motherduckExplorer.downloadSnapshot",
+          "when": "view == motherduckExplorer.databases && viewItem == snapshot",
+          "group": "inline"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "test": "node sql.test.js && node format.test.js",
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.84.0"
+  }
+}
