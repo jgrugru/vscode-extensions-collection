@@ -1,6 +1,6 @@
 const assert = require('assert');
 const {
-	sqlString, ident, qualified, schemaSql, groupSchemaRows,
+	sqlString, ident, qualified, schemasSql, tablesSql, columnsSql,
 	listSnapshotsSql, restoreSnapshotSql, copyDatabaseSql, copyTableSql, dropDatabaseSql,
 } = require('./sql');
 
@@ -8,25 +8,14 @@ assert.strictEqual(sqlString("it's"), "'it''s'");
 assert.strictEqual(ident('my "db"'), '"my ""db"""');
 assert.strictEqual(qualified('db', 'main', 't'), '"db"."main"."t"');
 
-assert.ok(schemaSql("'my_db'").includes("c.database_name = 'my_db'"));
+assert.ok(schemasSql("o'db").includes("database_name = 'o''db'"));
 
-assert.deepStrictEqual(
-	groupSchemaRows([
-		{ schema_name: 'main', table_name: 'a', column_name: 'id', data_type: 'INTEGER', is_nullable: false, kind: 'table', row_count: 10 },
-		{ schema_name: 'main', table_name: 'a', column_name: 'name', data_type: 'VARCHAR', is_nullable: true, kind: 'table', row_count: 10 },
-		{ schema_name: 'raw', table_name: 'b', column_name: 'x', data_type: 'DOUBLE', is_nullable: true, kind: 'view', row_count: null },
-	]),
-	[
-		{ schema: 'main', tables: [{ table: 'a', kind: 'table', rows: 10, columns: [
-			{ name: 'id', type: 'INTEGER', nullable: false },
-			{ name: 'name', type: 'VARCHAR', nullable: true },
-		] }] },
-		{ schema: 'raw', tables: [{ table: 'b', kind: 'view', rows: null, columns: [
-			{ name: 'x', type: 'DOUBLE', nullable: true },
-		] }] },
-	],
-);
-assert.deepStrictEqual(groupSchemaRows([]), []);
+const tables = tablesSql('my_db', 'raw');
+assert.ok(tables.includes("database_name = 'my_db' AND schema_name = 'raw'"));
+assert.ok(tables.includes('duckdb_tables()') && tables.includes('duckdb_views()'));
+
+const columns = columnsSql('my_db', 'raw', "o't");
+assert.ok(columns.includes("schema_name = 'raw' AND table_name = 'o''t'"));
 
 assert.strictEqual(
 	listSnapshotsSql("o'db"),

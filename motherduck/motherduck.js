@@ -1,8 +1,9 @@
 const fs = require('fs');
 const vscode = require('vscode');
 const { execFile } = require('child_process');
-const { schemaSql, groupSchemaRows, listSnapshotsSql, restoreSnapshotSql, copyDatabaseSql, copyTableSql, dropDatabaseSql, ident, sqlString } = require('./sql');
+const { schemasSql, tablesSql, columnsSql, listSnapshotsSql, restoreSnapshotSql, copyDatabaseSql, copyTableSql, dropDatabaseSql, ident, sqlString } = require('./sql');
 const { formatBytes, formatDuration } = require('./format');
+const { createTtlCache } = require('./cache');
 const { prepareDownloadTarget, defaultDownloadPath } = require('./download');
 
 const TOKEN_KEY = 'motherduck_token';
@@ -38,6 +39,17 @@ function run(sql, token, options = {}) {
 /** @param {vscode.ExtensionContext} context */
 function registerMotherDuck(context) {
 	const changed = new vscode.EventEmitter();
+	const cache = createTtlCache(() => vscode.workspace.getConfiguration('motherduckExplorer').get('cacheTtlSeconds', 300) * 1000);
+
+	/** Tree reads only: previews and downloads always hit MotherDuck. @param {string} sql */
+	function cachedQuery(sql) {
+		return cache.get(sql, () => query(sql));
+	}
+
+	function refresh() {
+		cache.clear();
+		changed.fire(undefined);
+	}
 
 	async function token() {
 		return (await context.secrets.get(TOKEN_KEY)) || process.env.motherduck_token || process.env.MOTHERDUCK_TOKEN || '';
@@ -76,14 +88,14 @@ function registerMotherDuck(context) {
 		}
 		await context.secrets.store(TOKEN_KEY, value.trim());
 		await updateSignedIn();
-		changed.fire(undefined);
+		refresh();
 		return true;
 	}
 
 	async function signOut() {
 		await context.secrets.delete(TOKEN_KEY);
 		await updateSignedIn();
-		changed.fire(undefined);
+		refresh();
 	}
 
 	const PREVIEW_ROWS = 100;
@@ -205,7 +217,7 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 			}
 			try {
 				if (!node) {
-					const rows = await query('SELECT name FROM md_information_schema.databases ORDER BY name');
+					const rows = await cachedQuery('SELECT name FROM md_information_schema.databases ORDER BY name');
 					view.message = undefined;
 					return rows.map((r) => ({ kind: 'database', name: r.name }));
 				}
@@ -216,18 +228,21 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 					];
 				}
 				if (node.kind === 'schemasGroup') {
-					const rows = await query(schemaSql(sqlString(node.database)));
-					return groupSchemaRows(rows).map((s) => ({ kind: 'schema', database: node.database, name: s.schema, tables: s.tables }));
+					const rows = await cachedQuery(schemasSql(node.database));
+					return rows.map((r) => ({ kind: 'schema', database: node.database, name: r.schema_name }));
 				}
 				if (node.kind === 'backupsGroup') {
-					const rows = await query(listSnapshotsSql(node.database));
+					const rows = await cachedQuery(listSnapshotsSql(node.database));
 					return rows.map((r) => ({ kind: 'snapshot', database: node.database, snapshotId: r.snapshot_id, createdTs: r.created_ts, activeBytes: r.active_bytes }));
 				}
 				if (node.kind === 'schema') {
-					return node.tables.map((relation) => ({ kind: 'table', database: node.database, relation: { ...relation, schema: node.name } }));
+					const rows = await cachedQuery(tablesSql(node.database, node.name));
+					return rows.map((r) => ({ kind: 'table', database: node.database, relation: { schema: node.name, table: r.table_name, kind: r.kind, rows: r.row_count } }));
 				}
 				if (node.kind === 'table') {
-					return node.relation.columns.map((column) => ({ kind: 'column', column }));
+					const { schema, table } = node.relation;
+					const rows = await cachedQuery(columnsSql(node.database, schema, table));
+					return rows.map((r) => ({ kind: 'column', column: { name: r.column_name, type: r.data_type, nullable: r.is_nullable } }));
 				}
 			} catch (err) {
 				if (!node) {
@@ -372,7 +387,7 @@ th { color: var(--vscode-descriptionForeground); font-weight: normal; }
 		view,
 		vscode.commands.registerCommand('motherduckExplorer.signIn', signIn),
 		vscode.commands.registerCommand('motherduckExplorer.signOut', signOut),
-		vscode.commands.registerCommand('motherduckExplorer.refresh', () => changed.fire(undefined)),
+		vscode.commands.registerCommand('motherduckExplorer.refresh', refresh),
 		vscode.commands.registerCommand('motherduckExplorer.preview', preview),
 		vscode.commands.registerCommand('motherduckExplorer.openDives', openDives),
 		vscode.commands.registerCommand('motherduckExplorer.downloadDatabase', downloadDatabase),

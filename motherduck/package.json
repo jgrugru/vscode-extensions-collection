@@ -130,10 +130,21 @@
           "group": "inline"
         }
       ]
+    },
+    "configuration": {
+      "title": "MotherDuck Explorer",
+      "properties": {
+        "motherduckExplorer.cacheTtlSeconds": {
+          "type": "number",
+          "default": 300,
+          "minimum": 0,
+          "description": "How long the database tree keeps query results before asking MotherDuck again. 0 turns caching off. The Refresh button always clears the cache."
+        }
+      }
     }
   },
   "scripts": {
-    "test": "node sql.test.js && node format.test.js && node download.test.js",
+    "test": "node sql.test.js && node format.test.js && node download.test.js && node cache.test.js",
     "package": "npx @vscode/vsce package"
   },
   "devDependencies": {

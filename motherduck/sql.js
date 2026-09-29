@@ -13,37 +13,24 @@ function qualified(...parts) {
 	return parts.map(ident).join('.');
 }
 
-/** @param {string} databaseSql SQL expression for the database name, e.g. a quoted literal */
-function schemaSql(databaseSql) {
-	return `
-SELECT c.schema_name, c.table_name, c.column_name, c.data_type, c.is_nullable, c.column_index,
-       CASE WHEN t.table_name IS NULL THEN 'view' ELSE 'table' END AS kind,
-       t.estimated_size AS row_count
-FROM duckdb_columns() c
-LEFT JOIN duckdb_tables() t
-  ON t.database_name = c.database_name AND t.schema_name = c.schema_name AND t.table_name = c.table_name
-WHERE NOT c.internal AND c.database_name = ${databaseSql}
-ORDER BY c.schema_name, c.table_name, c.column_index`;
+/** Schema names of one database. @param {string} database */
+function schemasSql(database) {
+	return `SELECT schema_name FROM duckdb_schemas() WHERE NOT internal AND database_name = ${sqlString(database)} ORDER BY schema_name`;
 }
 
-/**
- * Group schemaSql's flat column rows into schemas, each with its tables and their columns.
- * @param {any[]} rows
- * @returns {{schema: string, tables: {table: string, kind: string, rows: number | null, columns: {name: string, type: string, nullable: boolean}[]}[]}[]}
- */
-function groupSchemaRows(rows) {
-	const schemas = new Map();
-	for (const row of rows) {
-		if (!schemas.has(row.schema_name)) {
-			schemas.set(row.schema_name, new Map());
-		}
-		const tables = schemas.get(row.schema_name);
-		if (!tables.has(row.table_name)) {
-			tables.set(row.table_name, { table: row.table_name, kind: row.kind, rows: row.row_count, columns: [] });
-		}
-		tables.get(row.table_name).columns.push({ name: row.column_name, type: row.data_type, nullable: row.is_nullable });
-	}
-	return [...schemas.entries()].map(([schema, tables]) => ({ schema, tables: [...tables.values()] }));
+/** Tables and views of one schema, without their columns. @param {string} database @param {string} schema */
+function tablesSql(database, schema) {
+	const where = `NOT internal AND database_name = ${sqlString(database)} AND schema_name = ${sqlString(schema)}`;
+	return `
+SELECT table_name, 'table' AS kind, estimated_size AS row_count FROM duckdb_tables() WHERE ${where}
+UNION ALL
+SELECT view_name, 'view', NULL FROM duckdb_views() WHERE ${where}
+ORDER BY table_name`;
+}
+
+/** Columns of one table or view. @param {string} database @param {string} schema @param {string} table */
+function columnsSql(database, schema, table) {
+	return `SELECT column_name, data_type, is_nullable FROM duckdb_columns() WHERE database_name = ${sqlString(database)} AND schema_name = ${sqlString(schema)} AND table_name = ${sqlString(table)} ORDER BY column_index`;
 }
 
 /** @param {string} database */
@@ -75,6 +62,6 @@ function dropDatabaseSql(name) {
 }
 
 module.exports = {
-	sqlString, ident, qualified, schemaSql, groupSchemaRows,
+	sqlString, ident, qualified, schemasSql, tablesSql, columnsSql,
 	listSnapshotsSql, restoreSnapshotSql, copyDatabaseSql, copyTableSql, dropDatabaseSql,
 };
