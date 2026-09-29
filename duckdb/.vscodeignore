@@ -1,0 +1,6 @@
+.vscode/**
+.git/**
+.gitignore
+**/*.vsix
+*.duckdb
+sql.test.js

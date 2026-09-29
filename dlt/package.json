@@ -1,0 +1,126 @@
+{
+  "name": "vscode-extension-dlt",
+  "displayName": "dlt Pipelines",
+  "description": "Find dlt pipelines in your workspace and run them with one click",
+  "version": "0.1.0",
+  "publisher": "jgrugru",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "dlt",
+    "data load tool",
+    "pipeline",
+    "etl"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dltPipelines",
+          "title": "dlt",
+          "icon": "resources/dlt.svg"
+        }
+      ]
+    },
+    "views": {
+      "dltPipelines": [
+        {
+          "id": "dltPipelines.pipelines",
+          "name": "Pipelines"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "dltPipelines.pipelines",
+        "contents": "No dlt pipelines found. Open a folder with Python files that call dlt.pipeline().\n[Refresh](command:dltPipelines.refresh)"
+      }
+    ],
+    "taskDefinitions": [
+      {
+        "type": "dltPipeline",
+        "required": [
+          "file"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Path of the pipeline entry file."
+          }
+        }
+      }
+    ],
+    "commands": [
+      {
+        "command": "dltPipelines.run",
+        "title": "dlt: Run Pipeline",
+        "icon": "$(play)"
+      },
+      {
+        "command": "dltPipelines.stop",
+        "title": "dlt: Stop Pipeline",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "dltPipelines.refresh",
+        "title": "dlt: Refresh Pipelines",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "dltPipelines.run",
+          "when": "false"
+        },
+        {
+          "command": "dltPipelines.stop",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "dltPipelines.refresh",
+          "when": "view == dltPipelines.pipelines",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dltPipelines.run",
+          "when": "view == dltPipelines.pipelines && viewItem == dltPipeline.idle",
+          "group": "inline"
+        },
+        {
+          "command": "dltPipelines.stop",
+          "when": "view == dltPipelines.pipelines && viewItem == dltPipeline.running",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "dlt Pipelines",
+      "properties": {
+        "dltPipelines.runCommand": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Shell command that runs a pipeline, from the workspace folder. `${file}` is the entry file path and `${module}` its dotted module path. Empty means `python <file>`, or `python -m <module>` for a `__main__.py`, using `uv run` when the workspace has a `uv.lock`."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node pipelines.test.js",
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.84.0"
+  }
+}

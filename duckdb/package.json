@@ -1,0 +1,180 @@
+{
+  "name": "vscode-extension-duckdb",
+  "displayName": "DuckDB Terminal",
+  "description": "Open DuckDB files and CSV, Parquet, JSON or Excel files in the DuckDB UI, a shell or a schema view, and browse MotherDuck",
+  "version": "0.1.0",
+  "publisher": "jgrugru",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "duckdbTerminal.openUi",
+        "title": "DuckDB: Open in UI"
+      },
+      {
+        "command": "duckdbTerminal.openShell",
+        "title": "DuckDB: Open in Terminal"
+      },
+      {
+        "command": "duckdbTerminal.showSchema",
+        "title": "DuckDB: Show Schema"
+      },
+      {
+        "command": "duckdbTerminal.uploadToMotherDuck",
+        "title": "DuckDB: Upload to MotherDuck"
+      },
+      {
+        "command": "duckdbTerminal.motherduckSignIn",
+        "title": "DuckDB: MotherDuck Sign In"
+      },
+      {
+        "command": "duckdbTerminal.motherduckSignOut",
+        "title": "DuckDB: MotherDuck Sign Out"
+      },
+      {
+        "command": "duckdbTerminal.motherduckRefresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "duckdbTerminal.motherduckPreview",
+        "title": "Preview Rows"
+      },
+      {
+        "command": "duckdbTerminal.motherduckCreateShare",
+        "title": "Create Share"
+      },
+      {
+        "command": "duckdbTerminal.motherduckCopyShareUrl",
+        "title": "Copy Share URL"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "duckdbTerminal.openUi",
+          "when": "resourceExtname =~ /^\\.(duckdb|ddb|db|csv|tsv|parquet|json|jsonl|ndjson|xlsx)$/",
+          "group": "duckdb@1"
+        },
+        {
+          "command": "duckdbTerminal.openShell",
+          "when": "resourceExtname =~ /^\\.(duckdb|ddb|db|csv|tsv|parquet|json|jsonl|ndjson|xlsx)$/",
+          "group": "duckdb@2"
+        },
+        {
+          "command": "duckdbTerminal.showSchema",
+          "when": "resourceExtname =~ /^\\.(duckdb|ddb|db|csv|tsv|parquet|json|jsonl|ndjson|xlsx)$/",
+          "group": "duckdb@3"
+        },
+        {
+          "command": "duckdbTerminal.uploadToMotherDuck",
+          "when": "resourceExtname =~ /^\\.(duckdb|ddb|db|csv|tsv|parquet|json|jsonl|ndjson|xlsx)$/",
+          "group": "duckdb@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "duckdbTerminal.openUi",
+          "when": "false"
+        },
+        {
+          "command": "duckdbTerminal.openShell",
+          "when": "false"
+        },
+        {
+          "command": "duckdbTerminal.showSchema",
+          "when": "false"
+        },
+        {
+          "command": "duckdbTerminal.uploadToMotherDuck",
+          "when": "false"
+        },
+        {
+          "command": "duckdbTerminal.motherduckRefresh",
+          "when": "false"
+        },
+        {
+          "command": "duckdbTerminal.motherduckPreview",
+          "when": "false"
+        },
+        {
+          "command": "duckdbTerminal.motherduckCreateShare",
+          "when": "false"
+        },
+        {
+          "command": "duckdbTerminal.motherduckCopyShareUrl",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "duckdbTerminal.motherduckRefresh",
+          "when": "view == duckdbTerminal.motherduck && duckdbTerminal.mdSignedIn",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "duckdbTerminal.motherduckPreview",
+          "when": "view == duckdbTerminal.motherduck && viewItem == relation",
+          "group": "inline"
+        },
+        {
+          "command": "duckdbTerminal.motherduckCreateShare",
+          "when": "view == duckdbTerminal.motherduck && viewItem == db",
+          "group": "duckdb@1"
+        },
+        {
+          "command": "duckdbTerminal.motherduckCopyShareUrl",
+          "when": "view == duckdbTerminal.motherduck && (viewItem == share || viewItem == sharedDb)",
+          "group": "duckdb@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DuckDB Terminal",
+      "properties": {
+        "duckdbTerminal.uiPort": {
+          "type": "number",
+          "default": 4213,
+          "description": "Local port the DuckDB UI is shown on. DuckDB itself listens on the next port up, so both must be free."
+        },
+        "duckdbTerminal.executablePath": {
+          "type": "string",
+          "default": "duckdb",
+          "description": "DuckDB CLI executable to run. Use a full path if `duckdb` is not on PATH."
+        }
+      }
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "duckdbTerminal.motherduck",
+          "name": "MotherDuck"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "duckdbTerminal.motherduck",
+        "contents": "Sign in to browse your MotherDuck databases and shares.\n[Sign In](command:duckdbTerminal.motherduckSignIn)",
+        "when": "!duckdbTerminal.mdSignedIn"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "node sql.test.js",
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.84.0"
+  }
+}
