@@ -1,0 +1,59 @@
+{
+  "name": "vscode-extension-claude-launcher",
+  "displayName": "Claude Launcher",
+  "description": "Click through every Claude Code CLI option, see startup token cost, and launch a restricted session in a terminal",
+  "version": "0.1.0",
+  "publisher": "jgrugru",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "claudeLauncher",
+          "title": "Claude Launcher",
+          "icon": "resources/claude-launcher.svg"
+        }
+      ]
+    },
+    "views": {
+      "claudeLauncher": [
+        {
+          "id": "claudeLauncher.start",
+          "name": "Launcher",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "claudeLauncher.open",
+        "title": "Claude Launcher: Open"
+      }
+    ],
+    "configuration": {
+      "title": "Claude Launcher",
+      "properties": {
+        "claudeLauncher.executablePath": {
+          "type": "string",
+          "default": "claude",
+          "description": "Path of the claude CLI."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node flags.test.js",
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.84.0"
+  }
+}
