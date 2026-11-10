@@ -19,6 +19,9 @@
  * @property {boolean} [safeMode]
  * @property {boolean} [restricted]
  * @property {string} [appendSystemPrompt]
+ * @property {string} [systemPrompt]
+ * @property {string} [maxBudgetUsd]
+ * @property {string} [advisor]
  * @property {string[]} [addDirs]
  * @property {string} [name]
  * @property {string} [worktree]
@@ -37,12 +40,21 @@ function buildArgs(state) {
 	const list = (v) => (Array.isArray(v) ? v.filter(Boolean) : []);
 	if (state.model) a.push('--model', state.model);
 	if (state.effort) a.push('--effort', state.effort);
+	if (state.advisor) a.push('--advisor', state.advisor);
 	if (state.permissionMode) a.push('--permission-mode', state.permissionMode);
 
 	if (state.toolsMode === 'none') a.push('--tools', '');
 	else if (state.toolsMode === 'custom') a.push('--tools', list(state.tools).join(','));
-	if (list(state.allowedTools).length) a.push('--allowedTools', list(state.allowedTools).join(','));
+	const allowed = list(state.allowedTools);
 	const denied = [...list(state.disallowedTools), ...list(state.disabledSkills).map((s) => `Skill(${s})`)];
+	for (const f of Array.isArray(state.folderAccess) ? state.folderAccess : []) {
+		const p = f.file ? `/${f.path}` : `/${f.path}/**`;
+		const rule = (tool) => `${tool}(${p})`;
+		if (f.level === 'r') { allowed.push(rule('Read')); denied.push(rule('Edit'), rule('Write')); }
+		else if (f.level === 'rw') allowed.push(rule('Read'), rule('Edit'), rule('Write'));
+		else if (f.level === 'none') denied.push(rule('Read'), rule('Edit'), rule('Write'));
+	}
+	if (allowed.length) a.push('--allowedTools', allowed.join(','));
 	if (denied.length) a.push('--disallowedTools', denied.join(','));
 
 	if (state.mcpMode === 'none') {
@@ -63,8 +75,11 @@ function buildArgs(state) {
 	if (state.bare) a.push('--bare');
 	if (state.safeMode) a.push('--safe-mode');
 	if (state.restricted) a.push('--restricted');
+	if (state.systemPrompt) a.push('--system-prompt', state.systemPrompt);
+	if (state.maxBudgetUsd) a.push('--max-budget-usd', state.maxBudgetUsd);
 	if (state.appendSystemPrompt) a.push('--append-system-prompt', state.appendSystemPrompt);
-	if (list(state.addDirs).length) a.push('--add-dir', ...list(state.addDirs));
+	const extra = [...(Array.isArray(state.folderAccess) ? state.folderAccess.slice(1).map((f) => (f.file ? f.path.replace(/\/[^/]*$/, '') : f.path)) : []), ...list(state.addDirs)];
+	if (extra.length) a.push('--add-dir', ...extra);
 	if (state.name) a.push('--name', state.name);
 	if (state.worktree === true) a.push('--worktree');
 	else if (state.worktree) a.push('--worktree', state.worktree);
