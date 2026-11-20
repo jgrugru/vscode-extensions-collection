@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { buildArgs, toShell, parseUsage } = require('./flags');
+const { buildArgs, buildEnv, toShell, parseUsage } = require('./flags');
 
 assert.deepStrictEqual(buildArgs({}), []);
 assert.deepStrictEqual(buildArgs({ model: 'opus', toolsMode: 'none' }), ['--model', 'opus', '--tools', '']);
@@ -34,4 +34,7 @@ assert.deepStrictEqual(
 		'--settings', '{"enabledPlugins":{"p@m":false},"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,"autoAllowBashIfSandboxed":true,"filesystem":{"allowWrite":["/a"],"denyRead":["~/"],"allowRead":["/a","/b"]}}}',
 		'--add-dir', '/b']
 );
+assert.deepStrictEqual(buildEnv({}), {});
+assert.deepStrictEqual(buildArgs({ codeMode: true }), []);
+assert.strictEqual(toShell('claude', ['--model', 'opus'], buildEnv({ codeMode: true })), 'CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1 claude --model opus');
 console.log('flags ok');

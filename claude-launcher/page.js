@@ -71,6 +71,8 @@ details.model .f:first-of-type{margin-top:12px}
 <div class="tg"><input type="checkbox" id="continueSession"><label for="continueSession">Continue last conversation</label></div>
 <div class="tg"><input type="checkbox" id="worktreeOn"><label for="worktreeOn">Work in a safe copy (new branch)</label></div>
 <input type="text" id="worktree" placeholder="name for the copy (optional)" style="display:none;margin:0 0 8px">
+<div class="tg"><input type="checkbox" id="codeMode"><label for="codeMode">Code Mode (experimental)</label></div>
+<div class="help" style="margin:0 0 16px">Code Mode: Claude writes one script that makes several tool calls, instead of calling tools one at a time. Needs Claude Code v2.1.323 or later and a Claude subscription or Console account. Claude asks you to confirm the first time. A Code Mode session can only be resumed with Code Mode still on. Not included in the token measurement.</div>
 <div class="help" style="margin:0 0 16px">Off means not loaded. A dash means a custom pick in Advanced. Claude works in its own copy of the repo, on a new branch, so your current files stay untouched. Merge the branch when you like the result.</div>
 </div>
 
@@ -281,7 +283,7 @@ function state() {
     disableSlashCommands: !!$('slash').value, disabledSkills: m('skills') === 'none' ? names(found.skills) : m('skills') === 'pick' ? picked('skills', false) : [],
     disabledPlugins: m('plugins') === 'none' ? names(found.plugins) : m('plugins') === 'pick' ? picked('plugins', false) : [],
     bare: !!$('bare').value, safeMode: !!$('safeMode').value, appendSystemPrompt: $('appendSystemPrompt').value, systemPrompt: $('systemPrompt').value, maxBudgetUsd: $('maxBudgetUsd').value.trim(), advisor: $('advisor').value, addDirs: csv('addDirs'),
-    chatType: $('chatType').value, name: $('name').value, worktree: $('worktreeOn').checked ? ($('worktree').value || true) : '', continueSession: $('continueSession').checked,
+    chatType: $('chatType').value, name: $('name').value, worktree: $('worktreeOn').checked ? ($('worktree').value || true) : '', continueSession: $('continueSession').checked, codeMode: $('codeMode').checked,
   };
   if (src !== 'all') s.settingSources = src === 'none' ? [] : src.split(',');
   return s;
@@ -294,6 +296,7 @@ function summary() {
   if ($('plugins-mode').value === 'none') parts.push('no plugins');
   if ($('skills-mode').value === 'none') parts.push('no skills');
   if ($('slash').value) parts.push('no slash commands');
+  if ($('codeMode').checked) parts.push('Code Mode');
   $('sum').textContent = parts.filter(Boolean).join(' · ');
 }
 function fields() { return [...document.querySelectorAll('select[id], input[id], textarea[id]')]; }

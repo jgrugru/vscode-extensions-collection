@@ -29,6 +29,7 @@
  * @property {string} [worktree]
  * @property {boolean} [continueSession]
  * @property {string[]} [pluginDirs]
+ * @property {boolean} [codeMode] experimental: Claude writes one script for several tool calls (v2.1.323+, terminal sessions only)
  */
 
 /** @param {string} s */
@@ -102,9 +103,14 @@ function buildArgs(state) {
 	return a;
 }
 
-/** @param {string} exe @param {string[]} args */
-function toShell(exe, args) {
-	return [shellQuote(exe), ...args.map(shellQuote)].join(' ');
+/** Env vars the session needs. Code Mode has no CLI flag, only this variable. @param {State} state @returns {Record<string, string>} */
+function buildEnv(state) {
+	return state.codeMode ? { CLAUDE_CODE_EXPERIMENTAL_CODE_MODE: '1' } : {};
+}
+
+/** @param {string} exe @param {string[]} args @param {Record<string, string>} [env] */
+function toShell(exe, args, env) {
+	return [...Object.entries(env || {}).map(([k, v]) => `${k}=${shellQuote(v)}`), shellQuote(exe), ...args.map(shellQuote)].join(' ');
 }
 
 /** Sum startup input tokens from `claude -p --output-format json` output. @param {string} stdout */
@@ -117,4 +123,4 @@ function parseUsage(stdout) {
 	return { total: input + created + read, input, created, read, costUsd: r.total_cost_usd };
 }
 
-module.exports = { buildArgs, toShell, shellQuote, parseUsage };
+module.exports = { buildArgs, buildEnv, toShell, shellQuote, parseUsage };

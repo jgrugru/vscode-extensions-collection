@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
-const { buildArgs, toShell } = require('./flags');
+const { buildArgs, buildEnv, toShell } = require('./flags');
 const { discover, listMcp } = require('./discover');
 const { measure } = require('./measure');
 const { page } = require('./page');
@@ -86,7 +86,7 @@ function activate(context) {
 						if (picked) view.webview.postMessage({ type: 'picked', paths: picked.map((u) => u.fsPath) });
 						return;
 					}
-					const cmd = toShell(exe(), buildArgs(withChat(context, m.state || {})));
+					const cmd = toShell(exe(), buildArgs(withChat(context, m.state || {})), buildEnv(m.state || {}));
 					if (m.type === 'update') view.webview.postMessage({ type: 'command', text: cmd });
 					if (m.type === 'copy') {
 						await vscode.env.clipboard.writeText(cmd);
