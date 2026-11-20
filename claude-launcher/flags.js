@@ -18,6 +18,8 @@
  * @property {boolean} [bare]
  * @property {boolean} [safeMode]
  * @property {boolean} [restricted]
+ * @property {'ro'|'rw'} [strict] 'ro': read tools only; 'rw': shell sandboxed, writes limited to rw folders
+ * @property {{path: string, file?: boolean, level: string}[]} [folderAccess]
  * @property {string} [appendSystemPrompt]
  * @property {string} [systemPrompt]
  * @property {string} [maxBudgetUsd]
@@ -38,16 +40,20 @@ function shellQuote(s) {
 function buildArgs(state) {
 	const a = [];
 	const list = (v) => (Array.isArray(v) ? v.filter(Boolean) : []);
+	const strict = state.strict;
+	const folders = (Array.isArray(state.folderAccess) ? state.folderAccess : []).map((f) => (strict === 'ro' && f.level === 'rw' ? { ...f, level: 'r' } : f));
 	if (state.model) a.push('--model', state.model);
 	if (state.effort) a.push('--effort', state.effort);
 	if (state.advisor) a.push('--advisor', state.advisor);
-	if (state.permissionMode) a.push('--permission-mode', state.permissionMode);
+	if (strict) a.push('--permission-mode', 'dontAsk');
+	else if (state.permissionMode) a.push('--permission-mode', state.permissionMode);
 
-	if (state.toolsMode === 'none') a.push('--tools', '');
+	if (strict === 'ro') a.push('--tools', 'Read,Glob,Grep');
+	else if (state.toolsMode === 'none') a.push('--tools', '');
 	else if (state.toolsMode === 'custom') a.push('--tools', list(state.tools).join(','));
 	const allowed = list(state.allowedTools);
 	const denied = [...list(state.disallowedTools), ...list(state.disabledSkills).map((s) => `Skill(${s})`)];
-	for (const f of Array.isArray(state.folderAccess) ? state.folderAccess : []) {
+	for (const f of folders) {
 		const p = f.file ? `/${f.path}` : `/${f.path}/**`;
 		const rule = (tool) => `${tool}(${p})`;
 		if (f.level === 'r') { allowed.push(rule('Read')); denied.push(rule('Edit'), rule('Write')); }
@@ -65,11 +71,19 @@ function buildArgs(state) {
 		a.push('--strict-mcp-config', '--mcp-config', JSON.stringify({ mcpServers: servers }));
 	}
 
+	const settings = {};
 	if (list(state.disabledPlugins).length) {
-		const enabledPlugins = {};
-		for (const p of list(state.disabledPlugins)) enabledPlugins[p] = false;
-		a.push('--settings', JSON.stringify({ enabledPlugins }));
+		settings.enabledPlugins = {};
+		for (const p of list(state.disabledPlugins)) settings.enabledPlugins[p] = false;
 	}
+	if (strict === 'rw') {
+		const live = folders.filter((f) => f.level === 'r' || f.level === 'rw');
+		settings.sandbox = {
+			enabled: true, failIfUnavailable: true, allowUnsandboxedCommands: false, autoAllowBashIfSandboxed: true,
+			filesystem: { allowWrite: live.filter((f) => f.level === 'rw').map((f) => f.path), denyRead: ['~/'], allowRead: live.map((f) => f.path) },
+		};
+	}
+	if (Object.keys(settings).length) a.push('--settings', JSON.stringify(settings));
 	if (state.disableSlashCommands) a.push('--disable-slash-commands');
 	if (Array.isArray(state.settingSources)) a.push('--setting-sources', state.settingSources.join(','));
 	if (state.bare) a.push('--bare');
@@ -78,7 +92,7 @@ function buildArgs(state) {
 	if (state.systemPrompt) a.push('--system-prompt', state.systemPrompt);
 	if (state.maxBudgetUsd) a.push('--max-budget-usd', state.maxBudgetUsd);
 	if (state.appendSystemPrompt) a.push('--append-system-prompt', state.appendSystemPrompt);
-	const extra = [...(Array.isArray(state.folderAccess) ? state.folderAccess.slice(1).map((f) => (f.file ? f.path.replace(/\/[^/]*$/, '') : f.path)) : []), ...list(state.addDirs)];
+	const extra = [...folders.slice(1).map((f) => (f.file ? f.path.replace(/\/[^/]*$/, '') : f.path)), ...list(state.addDirs)];
 	if (extra.length) a.push('--add-dir', ...extra);
 	if (state.name) a.push('--name', state.name);
 	if (state.worktree === true) a.push('--worktree');

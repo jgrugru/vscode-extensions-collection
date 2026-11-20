@@ -40,8 +40,16 @@ button{font:inherit;border:0;border-radius:10px;padding:9px 14px;cursor:pointer}
 .trow .add{flex:none;width:22px;height:22px;padding:0;border-radius:50%;background:transparent;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 50%,transparent);line-height:1;opacity:.75}.trow .add:hover{opacity:1}
 .trow .add[data-s=rw]{background:#2ea043;border-color:#2ea043;color:#fff;opacity:1}
 .trow .add[data-s=r]{background:transparent;border-color:#2ea043;color:#2ea043;opacity:1;font-size:.75em;font-weight:700}
-.tree.extra{margin-top:8px}.tree.extra:empty{display:none}
+.tree.root{margin-bottom:8px}.tree.extra{margin-top:8px}.tree.extra:empty{display:none}
 .ico{flex:none;display:inline-flex;vertical-align:middle;margin-right:6px;opacity:.85}.ico.dir{color:var(--accent)}
+.tg{display:flex;align-items:center;gap:10px;margin:0 0 8px}.tg label{flex:1;cursor:pointer}.tg .c{opacity:.65;font-size:.88em}
+.tg input{appearance:none;-webkit-appearance:none;width:34px;height:20px;margin:0;flex:none;cursor:pointer;border-radius:10px;position:relative;background:var(--vscode-input-background);border:1px solid var(--vscode-panel-border)}
+.tg input:before{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--vscode-foreground);opacity:.6;transition:left .12s}
+.tg input:checked{background:var(--accent);border-color:var(--accent)}.tg input:checked:before{left:16px;background:#fff;opacity:1}.tg input:indeterminate:before{left:9px}
+.exp{width:22px;height:22px;padding:0;flex:none;background:transparent;color:inherit;opacity:.6;border-radius:6px;transition:transform .12s}.exp:hover{opacity:1}.exp.open{transform:rotate(90deg)}
+.tl{margin:-2px 0 10px 44px;font-size:.88em;opacity:.85;max-height:160px;overflow:auto}
+details.adv{margin:8px 0 20px}details.adv>summary{font-family:var(--serif);font-size:1.1em}
+.adv h2{font-family:var(--serif);font-weight:500;font-size:1.05em;margin:20px 0 10px}
 details.model{margin:0 0 20px;padding:10px 12px;border-radius:12px;background:var(--vscode-textCodeBlock-background)}
 details.model .f:first-of-type{margin-top:12px}
 </style></head><body>
@@ -54,8 +62,40 @@ details.model .f:first-of-type{margin-top:12px}
 <div class="f"><label for="advisor">Advisor (beta)</label><select id="advisor"><option value="">None</option><option value="claude-opus-5-5">Opus 5.5</option><option value="claude-sonnet-5-5">Sonnet 5.5</option><option value="claude-fable-5-1">Fable 5.1</option></select><div class="help">A stronger model reviews the full transcript and sends advice back; the main model applies it. It must be at least as capable as the main model, and it is billed at its own rates. Ask for it in your prompt, e.g. "consult the advisor before you start".</div></div>
 </details>
 
-<div class="f"><label for="projectType">What are you building?</label><select id="projectType"><option value="">Nothing specific</option></select>
-<div class="help" id="projectHint">Loads skills for that kind of project, for this session only.</div></div>
+<div class="toggles">
+<div class="tg"><input type="checkbox" id="tMcp"><label for="tMcp">MCP servers and connectors</label><span class="c" id="tMcpC"></span><button class="exp" data-l="tMcpL" title="Show list">›</button></div>
+<div class="tl" id="tMcpL" hidden></div>
+<div class="tg"><input type="checkbox" id="tPlugins"><label for="tPlugins">Plugins</label><span class="c" id="tPluginsC"></span></div>
+<div class="tg"><input type="checkbox" id="tSkills"><label for="tSkills">Skills</label><span class="c" id="tSkillsC"></span><button class="exp" data-l="tSkillsL" title="Show list">›</button></div>
+<div class="tl" id="tSkillsL" hidden></div>
+<div class="tg"><input type="checkbox" id="continueSession"><label for="continueSession">Continue last conversation</label></div>
+<div class="tg"><input type="checkbox" id="worktreeOn"><label for="worktreeOn">Work in a safe copy (new branch)</label></div>
+<input type="text" id="worktree" placeholder="name for the copy (optional)" style="display:none;margin:0 0 8px">
+<div class="help" style="margin:0 0 16px">Off means not loaded. A dash means a custom pick in Advanced. Claude works in its own copy of the repo, on a new branch, so your current files stay untouched. Merge the branch when you like the result.</div>
+</div>
+
+<div class="f" id="folders"><label>Access</label>
+<div class="help" style="margin:0 0 6px">Click + to add, again for read only, again to remove. The top row does the same for the whole folder.</div>
+<div id="rootRow" class="tree root"></div>
+<input type="hidden" id="strict" value="">
+<div id="strictRow" class="tree root"></div>
+<div class="help" id="strictHelp" style="margin:-2px 0 8px"></div>
+<div id="tree" class="tree"></div>
+<div id="extraRows" class="tree extra"></div>
+<button class="alt" id="folderAdd" style="margin-top:8px">Choose a folder...</button>
+<div class="help" id="folderHelp"></div></div>
+<div class="f"><label for="permissionMode">When to ask you</label><select id="permissionMode">
+<option value="">Ask before risky actions</option><option value="plan">Plan only, change nothing</option><option value="acceptEdits">Auto-accept file edits</option><option value="auto">Let a classifier decide</option><option value="dontAsk">Never ask, deny anything not allowed</option><option value="bypassPermissions">Never ask, allow everything</option></select></div>
+
+<details class="adv"><summary>Advanced options</summary>
+<h2>What should load at startup?</h2>
+<div class="help" style="margin:-6px 0 12px">Everything loaded adds tokens to every session.</div>
+<div class="f"><label for="mcp-mode">MCP servers</label><select id="mcp-mode"><option value="all">Load all servers and connectors</option><option value="none">Load none</option><option value="pick">Pick from this folder's .mcp.json...</option></select><div class="list" id="mcp-list"></div><div class="help">User-level servers and connectors are all or nothing.</div><div id="mcp-found" class="help">Looking up servers...</div><div class="help" id="mcp-est"></div><button class="alt" id="mcp-measure" style="margin-top:6px">Measure MCP cost</button></div>
+<div class="f"><label for="plugins-mode">Plugins</label><select id="plugins-mode"><option value="all">Load all plugins</option><option value="none">Load none</option><option value="pick">Pick plugins...</option></select><div class="list" id="plugins-list"></div><div class="help" id="plugins-est"></div></div>
+<div class="f"><label for="skills-mode">Skills</label><select id="skills-mode"><option value="all">Load all skills</option><option value="none">Load none</option><option value="pick">Pick skills...</option></select><div class="list" id="skills-list"></div><div class="help" id="skills-est"></div></div>
+<div class="f"><label for="slash">Slash commands</label><select id="slash"><option value="">Enabled</option><option value="1">Disable all slash commands (--disable-slash-commands)</option></select><div class="help">Separate from skills. Test that /clear, /compact and /voice still work if you turn this on.</div></div>
+
+<h2>Extras</h2>
 <div class="f"><label for="chatType">Chat type</label><select id="chatType">
 <option value="">General: no extra skills</option>
 <option value="brainstorm">Brainstorm: ask questions, design before building</option>
@@ -63,38 +103,10 @@ details.model .f:first-of-type{margin-top:12px}
 <option value="code">Code: test-first development</option>
 <option value="debug">Quick bug fix: root cause first</option></select>
 <div class="help" id="chatHint">Loads one bundled skill for this session only.</div></div>
-
-<div class="step"><div class="num">1</div><h2>What can Claude do?</h2>
-<div class="f"><label for="preset">Access</label><select id="preset">
-<option value="custom" selected>Custom: choose folders and files</option>
-<option value="ro-here">Read: look at files in this folder</option>
-<option value="rw-here">Read and edit: work on files in this folder</option></select>
-<div class="help" id="presetHint">Pick the folders and files below.</div></div>
-<div class="f" id="folders">
-<div class="help" style="margin:0 0 6px">Click + to add, again for read only, again to remove.</div>
-<div id="tree" class="tree"></div>
-<div id="extraRows" class="tree extra"></div>
-<button class="alt" id="folderAdd" style="margin-top:8px">Choose a folder...</button>
-<div class="help" id="folderHelp"></div></div>
-<div class="f"><label for="permissionMode">When to ask you</label><select id="permissionMode">
-<option value="">Ask before risky actions</option><option value="plan">Plan only, change nothing</option><option value="acceptEdits">Auto-accept file edits</option><option value="auto">Let a classifier decide</option><option value="dontAsk">Never ask, deny anything not allowed</option><option value="bypassPermissions">Never ask, allow everything</option></select></div>
-</div>
-
-<div class="step"><div class="num">2</div><h2>What should load at startup?</h2>
-<div class="help" style="margin:-6px 0 12px">Everything loaded adds tokens to every session.</div>
-<div class="f"><label for="mcp-mode">MCP servers</label><select id="mcp-mode"><option value="all">Load all servers and connectors</option><option value="none">Load none</option><option value="pick">Pick from this folder's .mcp.json...</option></select><div class="list" id="mcp-list"></div><div class="help">User-level servers and connectors are all or nothing.</div><div id="mcp-found" class="help">Looking up servers...</div><div class="help" id="mcp-est"></div><button class="alt" id="mcp-measure" style="margin-top:6px">Measure MCP cost</button></div>
-<div class="f"><label for="plugins-mode">Plugins</label><select id="plugins-mode"><option value="all">Load all plugins</option><option value="none">Load none</option><option value="pick">Pick plugins...</option></select><div class="list" id="plugins-list"></div><div class="help" id="plugins-est"></div></div>
-<div class="f"><label for="skills-mode">Skills</label><select id="skills-mode"><option value="all">Load all skills</option><option value="none">Load none</option><option value="pick">Pick skills...</option></select><div class="list" id="skills-list"></div><div class="help" id="skills-est"></div></div>
-<div class="f"><label for="slash">Slash commands</label><select id="slash"><option value="">Enabled</option><option value="1">Disable all slash commands (--disable-slash-commands)</option></select><div class="help">Separate from skills. Test that /clear, /compact and /voice still work if you turn this on.</div></div>
-</div>
-
-<div class="step"><div class="num">3</div><h2>Extras</h2>
 <div class="f"><label for="sources">CLAUDE.md, rules and hooks</label><select id="sources"><option value="all">Load user, project and local</option><option value="user,project">Load user and project</option><option value="user">Load user only</option><option value="project">Load project only</option><option value="none">Load none</option></select></div>
 <div class="f"><label for="restricted">Stay inside this folder</label><select id="restricted"><option value="">No</option><option value="1">Yes (no shell, no web fetch, ignores settings files)</option></select></div>
 <div class="f"><label for="tools-mode">Customize built-in tools</label><select id="tools-mode"><option value="all">Load all tools</option><option value="none">Load no tools (chat only)</option><option value="pick">Pick tools...</option></select><div class="list" id="tools-list"></div></div>
-<div class="f"><label for="continueSession">Conversation</label><select id="continueSession"><option value="">Start a new one</option><option value="1">Continue the most recent one</option></select></div>
 <div class="f"><label for="name">Session name</label><input type="text" id="name"></div>
-<div class="f"><label for="worktreeOn">Git worktree</label><select id="worktreeOn"><option value="">Work in the current checkout</option><option value="1">Work in a separate worktree (own branch and folder)</option></select><input type="text" id="worktree" placeholder="worktree name (optional)" style="display:none;margin-top:6px"><div class="help">A worktree is a second checkout of your repo on its own new branch, in its own folder. Claude edits there, so your current files stay untouched. Merge the branch when you like the result.</div></div>
 <div class="f"><label for="bare">Minimal mode</label><select id="bare"><option value="">Off</option><option value="1">Bare: skip hooks, LSP, plugins, memory, CLAUDE.md</option></select></div>
 <div class="f"><label for="safeMode">Troubleshooting</label><select id="safeMode"><option value="">Off</option><option value="1">Safe mode: disable all customizations</option></select></div>
 <div class="f"><label for="systemPrompt">System prompt (replaces the default)</label><textarea id="systemPrompt" rows="3"></textarea></div>
@@ -103,15 +115,14 @@ details.model .f:first-of-type{margin-top:12px}
 <div class="f"><label for="addDirs">Extra folders (comma separated)</label><input type="text" id="addDirs"></div>
 <div class="f"><label for="allowedTools">Always allow (comma separated)</label><input type="text" id="allowedTools" placeholder="Bash(git *),Edit"></div>
 <div class="f"><label for="disallowedTools">Always deny (comma separated)</label><input type="text" id="disallowedTools"></div>
-</div>
 
-<div class="step"><div class="num">4</div><h2>Check and start</h2>
+<h2>Check and start</h2>
 <details><summary>Show command</summary><pre id="cmd"></pre><button class="alt" id="copy">Copy command</button></details>
 <div class="cost"><div class="l" style="font-weight:600">Startup token cost</div>
 <div class="help">Runs one tiny request with these settings and reports real input tokens.</div>
 <div style="margin-top:8px"><button class="alt" id="measure">Measure this setup</button> <button class="alt" id="baseline">Measure defaults</button></div>
 <pre id="result">No measurement yet.</pre></div>
-</div>
+</details>
 
 <div class="bar"><div class="sum" id="sum"></div><button class="go" id="launch">Start Claude</button></div>
 
@@ -149,20 +160,6 @@ for (const [g, items] of Object.entries(lists)) {
 }
 const picked = (g, want) => [...document.querySelectorAll('input[data-g=' + g + ']')].filter((c) => c.checked === want).map((c) => c.value);
 
-const presets = {
-  'ro-here': { tools: ['Read', 'Glob', 'Grep'], permissionMode: '', restricted: '1', hint: 'Can read and search files here. Cannot edit, run commands or touch other folders.' },
-  'rw-here': { tools: ['Read', 'Glob', 'Grep', 'Edit', 'Write'], permissionMode: 'acceptEdits', restricted: '1', hint: 'Can read and edit files here, edits auto-accepted. No shell, no other folders.' },
-};
-$('preset').onchange = () => {
-  const p = presets[$('preset').value];
-  $('folders').style.display = p ? 'none' : '';
-  $('presetHint').textContent = p ? p.hint : 'Pick the folders and files below.';
-  if (!p) return;
-  $('permissionMode').value = p.permissionMode; $('restricted').value = p.restricted;
-  if (p.tools) { $('tools-mode').value = 'pick'; for (const c of document.querySelectorAll('input[data-g=tools]')) c.checked = p.tools.includes(c.value); }
-  else $('tools-mode').value = 'all';
-  $('tools-mode').onchange();
-};
 const chatHints = {
   '': 'Loads one bundled skill for this session only.',
   brainstorm: 'Skill: brainstorming (obra/superpowers). Asks questions, proposes approaches, and writes a design doc before any building.',
@@ -170,24 +167,18 @@ const chatHints = {
   code: 'Skill: test-driven-development (obra/superpowers). Failing test first, then minimal code. Strict.',
   debug: 'Skill: systematic-debugging (own wording). Find the root cause before any fix.',
 };
-for (const t of found.projectTypes || []) { const o = document.createElement('option'); o.value = t.id; o.textContent = t.label; $('projectType').appendChild(o); }
-$('projectType').onchange = () => {
-  const t = (found.projectTypes || []).find((x) => x.id === $('projectType').value);
-  $('projectHint').textContent = !t ? 'Loads skills for that kind of project, for this session only.' : t.skills.length ? 'Skills: ' + t.skills.join(', ') + '.' : 'No skills added yet. Add folders with a SKILL.md under project-plugins/' + t.id + '/skills/.';
-};
 $('chatType').onchange = () => { $('chatHint').textContent = chatHints[$('chatType').value]; };
-$('worktreeOn').onchange = () => { $('worktree').style.display = $('worktreeOn').value ? 'block' : 'none'; };
-
-const saved = (vscode.getState() || {}).min || [];
-document.querySelectorAll('.step').forEach((s, i) => {
-  s.classList.toggle('min', saved.includes(i));
-  const n = s.querySelector('.num');
-  n.title = 'Minimize or expand';
-  n.onclick = () => {
-    s.classList.toggle('min');
-    vscode.setState({ min: [...document.querySelectorAll('.step')].flatMap((x, j) => x.classList.contains('min') ? [j] : []) });
-  };
-});
+$('worktreeOn').onchange = () => { $('worktree').style.display = $('worktreeOn').checked ? 'block' : 'none'; };
+const toggles = [['tMcp', 'mcp-mode'], ['tPlugins', 'plugins-mode'], ['tSkills', 'skills-mode']];
+for (const [t, sel] of toggles) $(t).oninput = () => { $(sel).value = $(t).checked ? 'all' : 'none'; if ($(sel).onchange) $(sel).onchange(); };
+function syncToggles() {
+  for (const [t, sel] of toggles) { const v = $(sel).value; $(t).checked = v === 'all'; $(t).indeterminate = v !== 'all' && v !== 'none'; }
+}
+$('tSkillsC').textContent = fmt(sum(found.skills));
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+$('tSkillsL').innerHTML = found.skills.length ? found.skills.map((s) => esc(s.name) + ' <span style="opacity:.6">' + fmt(s.tokens) + '</span>').join('<br>') : 'No skills found.';
+for (const b of document.querySelectorAll('.exp')) b.onclick = () => { const l = $(b.dataset.l); l.hidden = !l.hidden; b.classList.toggle('open', !l.hidden); };
+$('tPluginsC').textContent = fmt(sum(found.plugins));
 
 const icoDir = '<svg class="ico dir" width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 3.5A1 1 0 0 1 2.5 2.5h3.2l1.4 1.5h6.4a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/></svg>';
 const icoFile = '<svg class="ico" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M3.5 1.5h6l3 3v10h-9z"/><path d="M9.5 1.5v3h3"/></svg>';
@@ -195,18 +186,27 @@ const chosen = new Map();
 const btns = {};
 const marks = { '': '+', rw: '\u2713', r: 'R' };
 const tips = { '': 'Add to session', rw: 'In session: read and edit. Click for read only.', r: 'In session: read only. Click to remove.' };
+const rootKey = found.root || '';
 function folderHelp() {
-  $('folderHelp').textContent = chosen.size ? 'Green = read and edit, R = read only. Claude starts in the first one; the others are added to the session.' : 'None chosen: Claude gets the whole workspace.';
+  const whole = chosen.has(rootKey);
+  for (const id of ['tree', 'extraRows', 'folderAdd']) $(id).style.display = whole ? 'none' : '';
+  $('folderHelp').textContent = whole ? 'Whole workspace: ' + (chosen.get(rootKey).level === 'r' ? 'read only.' : 'read and edit.') + ' Toggle it off to pick folders.' : chosen.size ? 'Green = read and edit, R = read only. Claude starts in the first one; the others are added to the session.' : 'None chosen: Claude gets the whole workspace.';
 }
 function paint(p) {
   const lv = (chosen.get(p) || {}).level || '';
   for (const b of btns[p] || []) { b.dataset.s = lv; b.textContent = marks[lv]; b.title = tips[lv]; }
 }
+const extras = new Map();
+function dropExtra(p) {
+  const wrap = extras.get(p); if (!wrap) return;
+  btns[p] = (btns[p] || []).filter((b) => !wrap.contains(b));
+  wrap.remove(); extras.delete(p);
+}
 function cycle(p, name, isFile) {
   const cur = (chosen.get(p) || {}).level || '';
   if (cur === '') chosen.set(p, { file: !!isFile, level: 'rw' });
   else if (cur === 'rw') chosen.set(p, { file: !!isFile, level: 'r' });
-  else chosen.delete(p);
+  else { chosen.delete(p); dropExtra(p); }
   paint(p); folderHelp(); send();
 }
 function treeRow(it, depth) {
@@ -230,16 +230,43 @@ function treeRow(it, depth) {
 }
 function addPicked(p) {
   if (!chosen.has(p)) { chosen.set(p, { file: false, level: 'rw' }); }
-  if (!btns[p]) $('extraRows').appendChild(treeRow({ path: p, name: p.split('/').pop() || p, dir: true }, 0));
+  if (!btns[p]) { const wrap = treeRow({ path: p, name: p.split('/').pop() || p, dir: true }, 0); extras.set(p, wrap); $('extraRows').appendChild(wrap); }
   paint(p); folderHelp();
 }
 folderHelp();
 const pending = {};
+{
+  const row = document.createElement('div'); row.className = 'trow'; row.title = found.root || '';
+  const nm = document.createElement('span'); nm.className = 'tn'; nm.innerHTML = icoDir; nm.append('Whole workspace');
+  const add = document.createElement('button'); add.className = 'add'; (btns[found.root || ''] = []).push(add); paint(found.root || '');
+  const set = (level) => { if (level) chosen.set(found.root || '', { file: false, level }); else chosen.delete(found.root || ''); paint(found.root || ''); folderHelp(); send(); };
+  const level = () => (chosen.get(found.root || '') || {}).level;
+  row.onclick = () => set(level() === 'rw' ? 'r' : level() === 'r' ? '' : 'rw');
+  row.append(nm, add); $('rootRow').appendChild(row);
+}
+const strictText = {
+  '': ['Strict lock: off', 'Claude can ask to go outside the folders you picked.'],
+  ro: ['Strict lock: read only', 'Only Read, Glob and Grep, and only inside the picked folders. No shell, no edits, no web.'],
+  rw: ['Strict lock: read and edit', 'Edits and shell commands allowed, but the shell runs in a sandbox: it can write only in the picked read-and-edit folders and cannot read your home folder except the picked ones. Anything else is refused, not asked.'],
+};
+function updateStrict() {
+  const v = $('strict').value, b = $('strictBtn');
+  $('strictName').textContent = strictText[v][0]; $('strictHelp').textContent = strictText[v][1] + (v ? ' With no folder picked, it locks to the whole workspace.' : '');
+  b.dataset.s = v === 'ro' ? 'r' : v === 'rw' ? 'rw' : ''; b.textContent = v === 'ro' ? 'R' : v === 'rw' ? '\u2713' : '+';
+}
+{
+  const row = document.createElement('div'); row.className = 'trow';
+  const nm = document.createElement('span'); nm.className = 'tn'; nm.id = 'strictName';
+  const b = document.createElement('button'); b.className = 'add'; b.id = 'strictBtn';
+  row.onclick = () => { $('strict').value = $('strict').value === '' ? 'ro' : $('strict').value === 'ro' ? 'rw' : ''; updateStrict(); send(); };
+  row.append(nm, b); $('strictRow').appendChild(row); updateStrict();
+}
 $('tree').textContent = 'Loading...';
 pending[found.root || ''] = (list) => { $('tree').textContent = ''; list.forEach((c) => $('tree').appendChild(treeRow(c, 0))); };
 vscode.postMessage({ type: 'listDir', path: found.root || '' });
 $('folderAdd').onclick = () => vscode.postMessage({ type: 'pickFolder' });
-const folderAccess = () => [...chosen].map(([path, v]) => ({ path, file: v.file, level: v.level }));
+const allAccess = () => [...chosen].map(([path, v]) => ({ path, file: v.file, level: v.level }));
+const folderAccess = () => allAccess().filter((f) => !chosen.has(rootKey) || f.path === rootKey);
 
 const csv = (id) => $(id).value.split(',').map((x) => x.trim()).filter(Boolean);
 
@@ -248,13 +275,13 @@ function state() {
   const src = $('sources').value;
   const s = {
     model: $('model').value, effort: $('effort').value, permissionMode: $('permissionMode').value,
-    restricted: !!$('restricted').value, folderAccess: $('preset').value === 'custom' ? folderAccess() : [], allowedTools: csv('allowedTools'), disallowedTools: csv('disallowedTools'),
+    restricted: !!$('restricted').value, strict: $('strict').value, folderAccess: folderAccess().length || !$('strict').value ? folderAccess() : [{ path: rootKey, file: false, level: 'rw' }], allowedTools: csv('allowedTools'), disallowedTools: csv('disallowedTools'),
     toolsMode: m('tools') === 'all' ? 'default' : m('tools') === 'none' ? 'none' : 'custom', tools: picked('tools', true),
     mcpMode: m('mcp') === 'pick' ? 'selected' : m('mcp'), mcpSelected: picked('mcp', true), mcpServers: found.mcpServers,
     disableSlashCommands: !!$('slash').value, disabledSkills: m('skills') === 'none' ? names(found.skills) : m('skills') === 'pick' ? picked('skills', false) : [],
     disabledPlugins: m('plugins') === 'none' ? names(found.plugins) : m('plugins') === 'pick' ? picked('plugins', false) : [],
     bare: !!$('bare').value, safeMode: !!$('safeMode').value, appendSystemPrompt: $('appendSystemPrompt').value, systemPrompt: $('systemPrompt').value, maxBudgetUsd: $('maxBudgetUsd').value.trim(), advisor: $('advisor').value, addDirs: csv('addDirs'),
-    chatType: $('chatType').value, projectType: $('projectType').value, name: $('name').value, worktree: $('worktreeOn').value ? ($('worktree').value || true) : '', continueSession: !!$('continueSession').value,
+    chatType: $('chatType').value, name: $('name').value, worktree: $('worktreeOn').checked ? ($('worktree').value || true) : '', continueSession: $('continueSession').checked,
   };
   if (src !== 'all') s.settingSources = src === 'none' ? [] : src.split(',');
   return s;
@@ -262,14 +289,37 @@ function state() {
 function summary() {
   $('modelSum').textContent = 'Model: ' + ($('model').value ? $('model').selectedOptions[0].textContent : 'CLI default') + ' · ' + ($('effort').value ? $('effort').selectedOptions[0].textContent.split(' (')[0] + ' effort' : 'default effort') + ($('advisor').value ? ' · Advisor: ' + $('advisor').selectedOptions[0].textContent : '');
   const sel = (id) => $(id).selectedOptions[0].textContent.split(':')[0];
-  const parts = [$('model').value ? sel('model') : 'Default model', $('preset').value === 'custom' ? 'Custom access' : sel('preset')];
+  const parts = [$('strict').value ? 'Strict ' + ($('strict').value === 'ro' ? 'read only' : 'read+edit') : null, $('model').value ? sel('model') : 'Default model', chosen.size ? 'Custom access' : 'Whole workspace'];
   if ($('mcp-mode').value === 'none') parts.push('no MCP');
   if ($('plugins-mode').value === 'none') parts.push('no plugins');
   if ($('skills-mode').value === 'none') parts.push('no skills');
   if ($('slash').value) parts.push('no slash commands');
-  $('sum').textContent = parts.join(' · ');
+  $('sum').textContent = parts.filter(Boolean).join(' · ');
 }
-function send() { summary(); estimate(); vscode.postMessage({ type: 'update', state: state() }); }
+function fields() { return [...document.querySelectorAll('select[id], input[id], textarea[id]')]; }
+function listBoxes() { return [...document.querySelectorAll('input[data-g]')]; }
+function saveForm() {
+  const v = {}; for (const f of fields()) v[f.id] = f.type === 'checkbox' ? f.checked : f.value;
+  const l = {}; for (const c of listBoxes()) l[c.dataset.g + ':' + c.value] = c.checked;
+  vscode.setState({ v, l, folders: allAccess() });
+}
+function applyForm(s) {
+  for (const f of fields()) {
+    if (!(f.id in s.v)) continue;
+    if (f.type === 'checkbox') f.checked = s.v[f.id];
+    else if (f.tagName !== 'SELECT' || [...f.options].some((o) => o.value === s.v[f.id])) f.value = s.v[f.id];
+  }
+  for (const c of listBoxes()) { const k = c.dataset.g + ':' + c.value; if (k in s.l) c.checked = s.l[k]; }
+}
+function restoreForm() {
+  const s = vscode.getState();
+  if (!s || !s.v) return;
+  applyForm(s); updateStrict();
+  for (const id of ['tools-mode', 'mcp-mode', 'plugins-mode', 'skills-mode', 'chatType', 'worktreeOn']) $(id).onchange();
+  for (const f of s.folders || []) { addPicked(f.path); chosen.set(f.path, { file: f.file, level: f.level }); paint(f.path); }
+  folderHelp();
+}
+function send() { saveForm(); syncToggles(); summary(); estimate(); vscode.postMessage({ type: 'update', state: state() }); }
 document.addEventListener('change', send); document.addEventListener('input', send);
 $('launch').onclick = () => vscode.postMessage({ type: 'launch', state: state() });
 $('copy').onclick = () => vscode.postMessage({ type: 'copy', state: state() });
@@ -282,6 +332,9 @@ window.addEventListener('message', (e) => {
   if (m.type === 'dir' && pending[m.path]) pending[m.path](m.entries);
   if (m.type === 'picked') { for (const p of m.paths) addPicked(p); send(); }
   if (m.type === 'command')$('cmd').textContent = m.text;
+  if (m.type === 'mcpList') $('tMcpL').innerHTML = m.servers.length ? m.servers.map((s) => esc(s.name) + ' <span style="opacity:.6">(' + esc(s.status) + ')</span>').join('<br>') : 'No MCP servers found.';
+  if (m.type === 'mcpList') $('tMcpC').textContent = m.servers.length ? 'measuring...' : 'none found';
+  if (m.type === 'mcpCost') $('tMcpC').textContent = m.error ? 'cost unavailable' : '~' + m.tokens.toLocaleString() + ' tokens';
   if (m.type === 'mcpList') $('mcp-found').innerHTML = m.servers.length ? '<b>Servers that would load:</b><br>' + m.servers.map((s) => s.name + ' <span style="opacity:.7">(' + s.status + ')</span>').join('<br>') : 'No MCP servers found.';
   if (m.type === 'mcpCost') $('mcp-est').textContent = m.error ? 'Error: ' + m.error : 'Loading all MCP servers costs about ' + m.tokens.toLocaleString() + ' tokens at startup (measured).';
   if (m.type === 'measure') {
@@ -290,6 +343,7 @@ window.addEventListener('message', (e) => {
     $('result').textContent = results.map((r) => r.label + ': ' + r.total + ' tokens (new ' + (r.input + r.created) + ', cached ' + r.read + ')' + (r.costUsd != null ? ', $' + r.costUsd.toFixed(4) : '')).join('\\n');
   }
 });
+restoreForm();
 send();
 </script></body></html>`;
 }

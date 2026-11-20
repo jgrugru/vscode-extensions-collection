@@ -24,4 +24,14 @@ assert.deepStrictEqual(
 	['--allowedTools', 'Read(//a/f.txt),Read(//a/d/**),Edit(//a/d/**),Write(//a/d/**)', '--disallowedTools', 'Edit(//a/f.txt),Write(//a/f.txt)', '--add-dir', '/a/d']
 );
 assert.deepStrictEqual(buildArgs({ advisor: 'claude-opus-5-5', systemPrompt: 'hi', maxBudgetUsd: '5' }), ['--advisor', 'claude-opus-5-5', '--system-prompt', 'hi', '--max-budget-usd', '5']);
+assert.deepStrictEqual(
+	buildArgs({ strict: 'ro', folderAccess: [{ path: '/a', level: 'rw' }] }),
+	['--permission-mode', 'dontAsk', '--tools', 'Read,Glob,Grep', '--allowedTools', 'Read(//a/**)', '--disallowedTools', 'Edit(//a/**),Write(//a/**)']
+);
+assert.deepStrictEqual(
+	buildArgs({ strict: 'rw', folderAccess: [{ path: '/a', level: 'rw' }, { path: '/b', level: 'r' }], disabledPlugins: ['p@m'] }),
+	['--permission-mode', 'dontAsk', '--allowedTools', 'Read(//a/**),Edit(//a/**),Write(//a/**),Read(//b/**)', '--disallowedTools', 'Edit(//b/**),Write(//b/**)',
+		'--settings', '{"enabledPlugins":{"p@m":false},"sandbox":{"enabled":true,"failIfUnavailable":true,"allowUnsandboxedCommands":false,"autoAllowBashIfSandboxed":true,"filesystem":{"allowWrite":["/a"],"denyRead":["~/"],"allowRead":["/a","/b"]}}}',
+		'--add-dir', '/b']
+);
 console.log('flags ok');

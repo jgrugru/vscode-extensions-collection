@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
 const { buildArgs, toShell } = require('./flags');
-const { discover, listMcp, listProjectTypes } = require('./discover');
+const { discover, listMcp } = require('./discover');
 const { measure } = require('./measure');
 const { page } = require('./page');
 
@@ -14,7 +14,6 @@ function exe() {
 function withChat(context, state) {
 	const dirs = [];
 	if (state.chatType) dirs.push(context.asAbsolutePath(`chat-plugins/${state.chatType}`));
-	if (state.projectType) dirs.push(context.asAbsolutePath(`project-plugins/${state.projectType}`));
 	return dirs.length ? { ...state, pluginDirs: dirs } : state;
 }
 
@@ -37,21 +36,39 @@ function activate(context) {
 				view.webview.options = { enableScripts: true };
 				const found = await discover(workspace());
 				found.root = workspace();
-				found.projectTypes = await listProjectTypes(context.asAbsolutePath('project-plugins'));
-				const nonce = Math.random().toString(36).slice(2);
+							const nonce = Math.random().toString(36).slice(2);
 				view.webview.html = page(nonce, found);
-				listMcp(exe(), workspace()).then((servers) => view.webview.postMessage({ type: 'mcpList', servers }));
-				view.webview.onDidReceiveMessage(async (m) => {
-					if (m.type === 'mcpCost') {
-						try {
-							const all = await measure(exe(), {}, workspace());
-							const none = await measure(exe(), { mcpMode: 'none' }, workspace());
-							view.webview.postMessage({ type: 'mcpCost', tokens: Math.max(0, all.total - none.total) });
-						} catch (err) {
-							view.webview.postMessage({ type: 'mcpCost', error: err.message });
-						}
-						return;
+				const mcpCost = async (key) => {
+					try {
+						const all = await measure(exe(), {}, workspace());
+						const none = await measure(exe(), { mcpMode: 'none' }, workspace());
+						const tokens = Math.max(0, all.total - none.total);
+						if (key) await context.globalState.update(key, tokens);
+						view.webview.postMessage({ type: 'mcpCost', tokens });
+					} catch (err) {
+						view.webview.postMessage({ type: 'mcpCost', error: err.message });
 					}
+				};
+				// Listing servers is slow, so show the saved list at once and refresh it in the background.
+				const listKey = 'mcpList:' + workspace();
+				const measuring = new Set();
+				const showMcp = (servers) => {
+					view.webview.postMessage({ type: 'mcpList', servers });
+					if (!servers.length) return;
+					// Measure once per server set, then reuse the saved number.
+					const key = 'mcpCost:' + servers.map((s) => s.name).sort().join(',');
+					const cached = context.globalState.get(key);
+					if (cached !== undefined) view.webview.postMessage({ type: 'mcpCost', tokens: cached });
+					else if (!measuring.has(key)) { measuring.add(key); mcpCost(key).finally(() => measuring.delete(key)); }
+				};
+				const savedList = context.globalState.get(listKey);
+				if (savedList) showMcp(savedList);
+				listMcp(exe(), workspace()).then(async (servers) => {
+					await context.globalState.update(listKey, servers);
+					showMcp(servers);
+				});
+				view.webview.onDidReceiveMessage(async (m) => {
+					if (m.type === 'mcpCost') { await mcpCost(); return; }
 					if (m.type === 'listDir') {
 						let entries = [];
 						try {
