@@ -1,0 +1,221 @@
+{
+  "name": "vscode-extension-assets",
+  "displayName": "Asset Finder",
+  "description": "Sidebar gallery of the images and videos in the workspace, with thumbnails, type filters and file actions",
+  "version": "0.1.0",
+  "publisher": "jgrugru",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "assetFinder",
+          "title": "Asset Finder",
+          "icon": "resources/assets.svg"
+        }
+      ]
+    },
+    "views": {
+      "assetFinder": [
+        {
+          "id": "assetFinder.assets",
+          "name": "Assets",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "assetFinder.refresh",
+        "title": "Asset Finder: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "assetFinder.smaller",
+        "title": "Asset Finder: Smaller Thumbnails",
+        "icon": "$(zoom-out)"
+      },
+      {
+        "command": "assetFinder.bigger",
+        "title": "Asset Finder: Bigger Thumbnails",
+        "icon": "$(zoom-in)"
+      },
+      {
+        "command": "assetFinder.open",
+        "title": "Open"
+      },
+      {
+        "command": "assetFinder.openExternal",
+        "title": "Open in Default App"
+      },
+      {
+        "command": "assetFinder.revealInFinder",
+        "title": "Reveal in Finder"
+      },
+      {
+        "command": "assetFinder.revealInExplorer",
+        "title": "Reveal in Explorer View"
+      },
+      {
+        "command": "assetFinder.copyPath",
+        "title": "Copy Path"
+      },
+      {
+        "command": "assetFinder.copyRelativePath",
+        "title": "Copy Relative Path"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "assetFinder.smaller",
+          "when": "view == assetFinder.assets",
+          "group": "navigation@1"
+        },
+        {
+          "command": "assetFinder.bigger",
+          "when": "view == assetFinder.assets",
+          "group": "navigation@2"
+        },
+        {
+          "command": "assetFinder.refresh",
+          "when": "view == assetFinder.assets",
+          "group": "navigation@3"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "assetFinder.open",
+          "when": "webviewId == 'assetFinder.assets' && webviewSection == 'asset'",
+          "group": "1_open@1"
+        },
+        {
+          "command": "assetFinder.openExternal",
+          "when": "webviewId == 'assetFinder.assets' && webviewSection == 'asset'",
+          "group": "1_open@2"
+        },
+        {
+          "command": "assetFinder.revealInFinder",
+          "when": "webviewId == 'assetFinder.assets' && webviewSection == 'asset'",
+          "group": "2_reveal@1"
+        },
+        {
+          "command": "assetFinder.revealInExplorer",
+          "when": "webviewId == 'assetFinder.assets' && webviewSection == 'asset'",
+          "group": "2_reveal@2"
+        },
+        {
+          "command": "assetFinder.copyPath",
+          "when": "webviewId == 'assetFinder.assets' && webviewSection == 'asset'",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "assetFinder.copyRelativePath",
+          "when": "webviewId == 'assetFinder.assets' && webviewSection == 'asset'",
+          "group": "3_copy@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "assetFinder.open",
+          "when": "false"
+        },
+        {
+          "command": "assetFinder.openExternal",
+          "when": "false"
+        },
+        {
+          "command": "assetFinder.revealInFinder",
+          "when": "false"
+        },
+        {
+          "command": "assetFinder.revealInExplorer",
+          "when": "false"
+        },
+        {
+          "command": "assetFinder.copyPath",
+          "when": "false"
+        },
+        {
+          "command": "assetFinder.copyRelativePath",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Asset Finder",
+      "properties": {
+        "assetFinder.imageExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "png",
+            "jpg",
+            "jpeg",
+            "gif",
+            "webp",
+            "svg",
+            "avif",
+            "bmp",
+            "ico"
+          ],
+          "description": "File extensions shown as images."
+        },
+        "assetFinder.videoExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "mp4",
+            "mov",
+            "m4v",
+            "webm"
+          ],
+          "description": "File extensions shown as videos."
+        },
+        "assetFinder.excludeFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            ".git",
+            "node_modules",
+            ".venv",
+            "venv",
+            "__pycache__"
+          ],
+          "description": "Folder names that are never scanned."
+        },
+        "assetFinder.maxFiles": {
+          "type": "number",
+          "default": 5000,
+          "description": "Stop scanning after this many assets."
+        },
+        "assetFinder.ffmpegPath": {
+          "type": "string",
+          "default": "ffmpeg",
+          "description": "Path of ffmpeg, used to grab a frame of each video as its thumbnail."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node assets.test.js",
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.84.0"
+  }
+}

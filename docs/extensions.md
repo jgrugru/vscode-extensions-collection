@@ -8,6 +8,7 @@ Monorepo layout: one folder per extension, each self-contained (own `package.jso
 | `motherduck/` | `vscode-extension-motherduck` | MotherDuck Explorer | own activity bar icon, duck |
 | `duckdb/` | `vscode-extension-duckdb` | DuckDB Terminal | no activity bar icon; adds a "MotherDuck" view to the Explorer sidebar |
 | `size/` | `vscode-extension-size` | Measure Size | none; adds "Measure Size" to the Explorer right-click menu |
+| `assets/` | `vscode-extension-assets` | Asset Finder | own activity bar icon, stacked frames with a play triangle |
 
 Tests: `npm test` in each folder runs plain `node <file>.test.js` (no test framework). Package: `npm run package` (`npx @vscode/vsce package`). Test files are excluded from the vsix via `.vscodeignore`.
 
@@ -55,3 +56,17 @@ Right-click any file or folder in the Explorer, **Measure Size** shows the total
 - `size.js` - pure logic: `measure(path, isCancelled, totals)` walks the tree with `lstat` (symlinks not followed, unreadable items counted as skipped), `formatBytes` (decimal units like Finder), `describe` builds the message. Tested by `size.test.js`.
 - Ids: command `measureSize.measure`, hidden from the palette. Menu `explorer/context`, `when: resourceScheme == file`, group `7_modification@9`.
 - Size is the sum of logical file sizes, not blocks on disk, so it can differ from `du`.
+
+## assets
+
+Sidebar gallery (webview view) of every image and video in the workspace: thumbnails, type chips (PNG, MP4, ...), name filter, click to open, right-click file actions.
+
+- `extension.js` - webview view provider, scan, file watcher (debounced rescan), commands. Opens with the built-in `media-preview` editors (`imagePreview.previewEditor`, `vscode.videoPreview`) through `vscode.openWith`, so `.mov` and `.m4v` play too.
+- `assets.js` - pure logic: `kindMap`, `walk` (own `readdir` walk, case-insensitive extensions, skips `excludeFolders`, no symlinks, capped at `maxFiles`), `thumbName`, `ffmpegArgs`, `ffmpegCandidates`.
+- `thumbs.js` - `createThumbnailer`: one jpg frame per video via `ffmpeg` (keyframe near 1s with `-skip_frame nokey -noaccurate_seek`, falls back to 0s), 4 at a time and newest request first, cached in `globalStorage/thumbs` keyed by path, mtime and size. The host sends the jpg to the webview as a data URI (loading it by webview URI from globalStorage did not render). Failures go to the "Asset Finder" output channel. Tries the configured path, then `/opt/homebrew/bin` and `/usr/local/bin`, because the editor's PATH often lacks Homebrew.
+- `page.js` - HTML shell and CSP. `media/view.js` and `media/view.css` - the gallery. Video thumbnails are requested lazily (IntersectionObserver); with no ffmpeg the tile falls back to a `<video preload="metadata">`.
+- Tiles are grouped by folder (collapsible headers; toggle chip switches to one flat grid). With more than 24 assets in several folders, folders start closed, so only an opened folder asks for thumbnails. A search opens every match. Open/closed state and mode live in webview state.
+- Thumbnail size: `assetFinder.smaller|bigger` title buttons post `zoom` to the webview, which steps a `--tile` CSS variable (kept in webview state).- Right-click menu is `menus.webview/context`; each tile carries `data-vscode-context` with `webviewSection: "asset"` and `assetPath`. Commands look the path up in the current scan (`known`), never trust it blindly.
+- Ids: container `assetFinder`, view `assetFinder.assets`, commands `assetFinder.refresh|open|openExternal|revealInFinder|revealInExplorer|copyPath|copyRelativePath`.
+- Settings: `assetFinder.imageExtensions`, `videoExtensions`, `excludeFolders`, `maxFiles`, `ffmpegPath`.
+- Tests (`assets.test.js`) make real clips with ffmpeg when it is installed; skipped otherwise.
