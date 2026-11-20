@@ -7,6 +7,7 @@ Monorepo layout: one folder per extension, each self-contained (own `package.jso
 | `dlt/` | `vscode-extension-dlt` | dlt Pipelines | own activity bar icon, label "dlt" |
 | `motherduck/` | `vscode-extension-motherduck` | MotherDuck Explorer | own activity bar icon, duck |
 | `duckdb/` | `vscode-extension-duckdb` | DuckDB Terminal | no activity bar icon; adds a "MotherDuck" view to the Explorer sidebar |
+| `size/` | `vscode-extension-size` | Measure Size | none; adds "Measure Size" to the Explorer right-click menu |
 
 Tests: `npm test` in each folder runs plain `node <file>.test.js` (no test framework). Package: `npm run package` (`npx @vscode/vsce package`). Test files are excluded from the vsix via `.vscodeignore`.
 
@@ -45,3 +46,12 @@ Right-click a data file (`.duckdb .ddb .db .csv .tsv .parquet .json .jsonl .ndjs
 - `motherduck.js` - its own copy of a MotherDuck browser (view `duckdbTerminal.motherduck` in the Explorer, with shares). This overlaps the `motherduck/` extension; it is a separate implementation, not shared code.
 - Settings: `duckdbTerminal.uiPort`, `duckdbTerminal.executablePath`.
 - `.superpowers/` and `.vscode/` are local tooling folders.
+
+## size
+
+Right-click any file or folder in the Explorer, **Measure Size** shows the total size in a notification (with file and folder counts, and a Copy button). Works on a multi-selection.
+
+- `extension.js` - the `measureSize.measure` command: progress notification (cancellable), then the result message.
+- `size.js` - pure logic: `measure(path, isCancelled, totals)` walks the tree with `lstat` (symlinks not followed, unreadable items counted as skipped), `formatBytes` (decimal units like Finder), `describe` builds the message. Tested by `size.test.js`.
+- Ids: command `measureSize.measure`, hidden from the palette. Menu `explorer/context`, `when: resourceScheme == file`, group `7_modification@9`.
+- Size is the sum of logical file sizes, not blocks on disk, so it can differ from `du`.

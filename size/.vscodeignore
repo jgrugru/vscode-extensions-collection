@@ -1,0 +1,7 @@
+.vscode/**
+.git/**
+.gitignore
+docs/**
+**/*.vsix
+*.test.js
+node_modules/**

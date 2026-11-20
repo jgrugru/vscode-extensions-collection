@@ -1,0 +1,46 @@
+{
+  "name": "vscode-extension-size",
+  "displayName": "Measure Size",
+  "description": "Right-click a file or folder in the Explorer to see its total size",
+  "version": "0.1.0",
+  "publisher": "jgrugru",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.84.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "measureSize.measure",
+        "title": "Measure Size"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "measureSize.measure",
+          "when": "resourceScheme == file",
+          "group": "7_modification@9"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "measureSize.measure",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "test": "node size.test.js",
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.84.0"
+  }
+}
